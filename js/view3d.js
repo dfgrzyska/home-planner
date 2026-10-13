@@ -6,6 +6,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 import { PLAN } from './plan.js';
 import { CATALOG_BY_KEY } from './catalog.js';
 import { FLOORS, COUNTERS, FRAMES } from './style.js';
@@ -48,9 +49,12 @@ function glowTexture(shape, color, color2, vertical) {
     for (let x = 0; x < S; x++) {
       const u = x / (S - 1), v = y / (S - 1);
       let a;
-      const ex = sm(0, 0.22, u) * sm(0, 0.22, 1 - u);
+      const ex = sm(0, 0.12, u) * sm(0, 0.12, 1 - u);
+      const ey = sm(0, 0.12, v) * sm(0, 0.12, 1 - v);
       if (shape === 'up') a = ex * Math.pow(v, 2.2);           // jasno przy dolnej krawędzi (v=1), zanik w górę
       else if (shape === 'down') a = ex * Math.pow(1 - v, 2.2);
+      else if (shape === 'line') a = ex * Math.exp(-(((v - 0.5) / 0.2) ** 2));   // pas wzdłuż poziomej taśmy
+      else if (shape === 'vline') a = ey * Math.exp(-(((u - 0.5) / 0.2) ** 2));  // pas wzdłuż pionowej taśmy
       else {
         // miękka elipsa: pełna jasność w środku, łagodny zanik do krawędzi
         const dd = Math.hypot((u - 0.5) / 0.5, (v - 0.5) / 0.5);
@@ -264,6 +268,7 @@ export class View3D {
     this.selectedId = null;
     this.dirty = true;
 
+    RectAreaLightUniformsLib.init();
     const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     r.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     r.shadowMap.enabled = true;
@@ -554,6 +559,14 @@ export class View3D {
         l.position.set(...L.pos);
         l.userData.lm = L.lm;
         made.push(l);
+      } else if (L.kind === 'rect') {
+        // taśma: prostokąt świecący 2 cm × długość odcinka (wymiary w metrach – RectAreaLight ignoruje skalę rodzica)
+        const len = L.len * M, thick = (L.thick || 2) * M;
+        const l = new THREE.RectAreaLight(color, (L.lm / (len * thick * Math.PI)) * LIGHT_K * (L.k ?? 1), L.vertical ? thick : len, L.vertical ? len : thick);
+        l.position.set(...L.pos);
+        l.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), new THREE.Vector3(...L.normal));
+        l.userData.lm = 0; // bez cieni
+        made.push(l);
       } else if (L.kind === 'spot') {
         const half = Math.min(L.angle / 2, 85) * (Math.PI / 180);
         const l = new THREE.SpotLight(color, (L.lm / (2 * Math.PI * (1 - Math.cos(half)))) * LIGHT_K * (L.k ?? 1), 6, half, 0.6, 2);
@@ -592,7 +605,7 @@ export class View3D {
 
   // Cienie tylko dla najjaśniejszych świateł (budżet tekstur), reszta bez cieni z ograniczonym zasięgiem
   assignShadows() {
-    const sorted = [...this.lights].sort((a, b) => b.userData.lm - a.userData.lm);
+    const sorted = this.lights.filter((l) => l.shadow).sort((a, b) => b.userData.lm - a.userData.lm);
     sorted.forEach((l, i) => {
       const cast = i < SHADOW_BUDGET;
       l.castShadow = cast;

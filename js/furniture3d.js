@@ -24,18 +24,33 @@ export function glowMat(color, on = true, k = 1.6) {
 const lerpHex = (a, b, t) => '#' + new THREE.Color(a).lerp(new THREE.Color(b), t).getHexString();
 
 // Opis źródeł światła w układzie lokalnym elementu (cm); view3d zamienia je na światła sceny.
-// kind: point | spot (dir = kierunek) | glow (poświata na ścianie: dir = kierunek do ściany, shape = box/up/down)
+// kind: point | spot (dir = kierunek) | rect (taśma LED) | glow (poświata na ścianie: dir = kierunek do ściany,
+// shape = box – elipsa wokół lampy, line / vline – pas wzdłuż taśmy, up / down – zanik w pionie)
 function addLight(g, L) { (g.userData.lights ||= []).push(L); }
 
-function stripLights(g, L, len, y, z, vertical) {
-  const n = Math.max(1, Math.min(4, Math.round(len / 150)));
+// Taśma LED = liniowe źródło światła (RectAreaLight) na całej długości taśmy,
+// przy gradiencie 3 odcinki w kolejnych kolorach. normal = kierunek świecenia.
+// Liniowe źródło świecące na ścianę za elementem (Signe, Play, TV): odcinki w kolorach gradientu
+function wallRun(g, L, len, vertical, center, k, thick = 2) {
+  const n = L.color === L.color2 ? 1 : 3;
+  const seg = len / n;
   for (let i = 0; i < n; i++) {
     const t = n === 1 ? 0.5 : i / (n - 1);
-    const p = -len / 2 + len * (n === 1 ? 0.5 : 0.1 + 0.8 * t);
-    const color = lerpHex(L.color, L.color2, t);
-    const off = { out: [0, 0, 8], up: [0, 8, 4], down: [0, -8, 4], back: [0, 0, -2] }[L.dir] || [0, 0, 8];
-    const pos = vertical ? [off[0], y + p + len / 2, z + off[2]] : [p + off[0], y + off[1], z + off[2]];
-    addLight(g, { kind: 'point', pos, color, lm: L.lm / n });
+    const p = -len / 2 + seg * (i + 0.5);
+    const pos = vertical ? [center[0], center[1] + p, center[2]] : [center[0] + p, center[1], center[2]];
+    addLight(g, { kind: 'rect', pos, normal: [0, 0, -1], len: seg, thick, vertical, color: lerpHex(L.color, L.color2, t), lm: L.lm / n, k });
+  }
+}
+
+function stripLights(g, L, len, y, z, vertical) {
+  const n = L.color === L.color2 ? 1 : 3;
+  const normal = vertical || L.dir === 'out' ? [0, 0, 1] : L.dir === 'up' ? [0, 1, 0] : [0, -1, 0];
+  const seg = len / n;
+  for (let i = 0; i < n; i++) {
+    const t = n === 1 ? 0.5 : i / (n - 1);
+    const p = -len / 2 + seg * (i + 0.5);
+    const pos = vertical ? [0, y + len / 2 + p, z + 1.5] : [p, y + normal[1] * 1.2, z + (normal[2] ? 1.5 : 0)];
+    addLight(g, { kind: 'rect', pos, normal, len: seg, vertical, color: lerpHex(L.color, L.color2, t), lm: L.lm / n });
   }
 }
 
@@ -375,8 +390,8 @@ export function buildFurniture(it, def, style) {
       if (L && L.on) {
         const n = 6;
         for (let i = 0; i < n; i++) box(g, (w - 10) / n, 1, 0.4, -hw + 5 + ((w - 10) / n) * (i + 0.5), sh - 3, -2.2, glowMat(lerpHex(L.color, L.color2, i / (n - 1)), true, 2));
-        addLight(g, { kind: 'spot', pos: [-w / 4, sh / 2, -hd - 2], dir: [-0.35, 0, -1], angle: 110, color: L.color, lm: L.lm / 2, k: 0.4 });
-        addLight(g, { kind: 'spot', pos: [w / 4, sh / 2, -hd - 2], dir: [0.35, 0, -1], angle: 110, color: L.color2, lm: L.lm / 2, k: 0.4 });
+        // świecący prostokąt za ekranem skierowany na ścianę – aureola wokół telewizora
+        wallRun(g, L, w - 12, false, [0, sh / 2, -hd - 0.5], 0.5, sh - 12);
         addLight(g, { kind: 'glow', pos: [0, sh / 2, -hd], dir: [0, 0, -1], size: [w + 90, sh + 80], shape: 'box', color: L.color, color2: L.color2, lm: L.lm });
       }
       break;
@@ -567,7 +582,7 @@ export function buildFurniture(it, def, style) {
         box(g, w, 1.5, 1.8, 0, 0, -hd + 0.9, metal('#cfd1d3'));
         for (let i = 0; i < n; i++) {
           const t = n === 1 ? 0.5 : i / (n - 1);
-          const m = glowMat(lerpHex(L.color, L.color2, t), on, 2.2);
+          const m = glowMat(lerpHex(L.color, L.color2, t), on, 0.75);
           const sx = -hw + (w / n) * (i + 0.5);
           if (L.dir === 'up') box(g, w / n, 0.3, 1.2, sx, 1.5, -hd + 0.9, m);
           else if (L.dir === 'down') box(g, w / n, 0.3, 1.2, sx, -0.3, -hd + 0.9, m);
@@ -576,7 +591,7 @@ export function buildFurniture(it, def, style) {
       }
       if (on) {
         stripLights(g, L, w, 0.8, -hd + 1, false);
-        addLight(g, { kind: 'glow', pos: [0, 0.8, -hd], dir: [0, 0, -1], size: [w + 50, L.dir === 'out' ? 60 : 110], shape: L.dir === 'up' ? 'up' : L.dir === 'down' ? 'down' : 'box', color: L.color, color2: L.color2, lm: L.lm });
+        addLight(g, { kind: 'glow', pos: [0, 0.8, -hd], dir: [0, 0, -1], size: [w + 50, L.dir === 'out' ? 60 : 110], shape: L.dir === 'up' ? 'up' : L.dir === 'down' ? 'down' : 'line', color: L.color, color2: L.color2, lm: L.lm });
       }
       break;
     }
@@ -585,10 +600,10 @@ export function buildFurniture(it, def, style) {
       const on = L && L.on;
       box(g, 1.8, H, 1.8, 0, 0, 0, metal('#cfd1d3'));
       const n = 8;
-      for (let i = 0; i < n; i++) box(g, 0.3, H / n, 1.2, 0.95, (H / n) * i, 0, glowMat(lerpHex(L.color, L.color2, i / (n - 1)), on, 2.2));
+      for (let i = 0; i < n; i++) box(g, 0.3, H / n, 1.2, 0.95, (H / n) * i, 0, glowMat(lerpHex(L.color, L.color2, i / (n - 1)), on, 0.75));
       if (on) {
         stripLights(g, { ...L, dir: 'out' }, H, 0, 0, true);
-        addLight(g, { kind: 'glow', pos: [0, H / 2, -hd], dir: [0, 0, -1], size: [70, H + 40], shape: 'box', color: L.color, color2: L.color2, lm: L.lm, vertical: true });
+        addLight(g, { kind: 'glow', pos: [0, H / 2, -hd], dir: [0, 0, -1], size: [70, H + 40], shape: 'vline', color: L.color, color2: L.color2, lm: L.lm, vertical: true });
       }
       break;
     }
@@ -604,7 +619,8 @@ export function buildFurniture(it, def, style) {
       }
       if (tube) { box(g, 3, 5, 3, -hw + 4, 0, 0, dark()); box(g, 3, 5, 3, hw - 4, 0, 0, dark()); }
       if (on) {
-        addLight(g, { kind: 'spot', pos: [0, tube ? 8 : H * 0.6, 18], dir: [0, 0.3, -1], angle: 110, color: lerpHex(L.color, L.color2, 0.5), lm: L.lm, k: 0.3 });
+        if (tube) wallRun(g, L, w - 6, false, [0, 2.5, -3], 0.5, 4);
+        else wallRun(g, L, H - 2, true, [0, H / 2, -hd - 0.5], 0.5, 4);
         addLight(g, { kind: 'glow', pos: [0, tube ? 3 : H * 0.6, -hd], dir: [0, 0, -1], size: [tube ? w + 80 : 90, tube ? 90 : H + 70], shape: tube ? 'up' : 'box', color: L.color, color2: L.color2, lm: L.lm });
       }
       break;
@@ -619,8 +635,8 @@ export function buildFurniture(it, def, style) {
       const n = 8;
       for (let i = 0; i < n; i++) box(g, 1.6, (H - 6) / n, 0.4, 0, 3 + ((H - 6) / n) * i, -1.8, glowMat(lerpHex(L.color, L.color2, i / (n - 1)), on, 2));
       if (on) {
-        // źródło odsunięte od ściany i szeroki stożek – miękka poświata zamiast punktu na ścianie
-        addLight(g, { kind: 'spot', pos: [0, H * 0.5, 22], dir: [0, 0.1, -1], angle: 110, color: lerpHex(L.color, L.color2, 0.5), lm: L.lm, k: 0.3 });
+        // dioda wzdłuż słupka świeci na ścianę: wydłużona poświata, nie okrągła plama
+        wallRun(g, L, H - 10, true, [0, H / 2 + 2, -3], 0.5);
         addLight(g, { kind: 'glow', pos: [0, H * 0.55, -hd], dir: [0, 0, -1], size: [floor ? 140 : 90, H + (floor ? 80 : 50)], shape: 'box', color: L.color, color2: L.color2, lm: L.lm, vertical: true });
       }
       break;
