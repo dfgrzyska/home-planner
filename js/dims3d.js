@@ -13,6 +13,7 @@ export const H_BY_KIND = {
   office_chair: 110, tv: 0, cabinet: 85, shelf: 200, wardrobe: 220, desk: 75, bench: 45,
   k_base: 90, k_corner: 90, k_sink: 90, k_hob: 90, k_oven: 215, k_fridge: 185, k_appliance: 90, k_wall: 72, k_island: 90,
   bath: 55, shower: 200, washbasin: 85, wc: 40, washer: 85, lounger: 45, plant: 60, lamp: 165, rug: 1, rug_round: 1, radiator: 60, box: 75,
+  pet_bed: 22, pet_bed_round: 22, pet_bowls: 30,
 };
 // Montaż od podłogi dla elementów na ścianie
 export const E_BY_KIND = { tv: 75, k_wall: 145, radiator: 15 };

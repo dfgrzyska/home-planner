@@ -366,6 +366,31 @@ export function buildFurniture(it, def, style) {
       cyl(g, 20, 28, 0, H - 28, 0, mat(col || '#f3ede2', { rough: 0.9, emissive: '#fff1d6' }), 15);
       break;
     }
+    case 'pet_bed': {
+      const m = fabric(col || '#7b6f63');
+      const b = Math.min(14, Math.min(w, d) * 0.16);
+      box(g, w, 9, d, 0, 0, 0, m);
+      box(g, w - 2 * b, 6, d - b - 4, 0, 9, b / 2 - 2, fabric('#d9d1c4'));
+      box(g, w, H - 9, b, 0, 9, -hd + b / 2, m);
+      box(g, b, H - 9, d, -hw + b / 2, 9, 0, m);
+      box(g, b, H - 9, d, hw - b / 2, 9, 0, m);
+      box(g, w - 2 * b, 5, 6, 0, 9, hd - 3, m);
+      break;
+    }
+    case 'pet_bed_round': {
+      const m = fabric(col || '#7b6f63');
+      cyl(g, hw, 8, 0, 0, 0, m);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(hw * 0.82, hw * 0.16, 16, 48), m);
+      ring.rotation.x = Math.PI / 2; ring.scale.z = 0.9; ring.position.y = 13;
+      g.add(ring);
+      cyl(g, hw * 0.68, 4, 0, 8, 0, fabric('#d9d1c4'));
+      break;
+    }
+    case 'pet_bowls': {
+      box(g, w, H - 6, d, 0, 0, 0, wood(col || C.oak));
+      for (const x of [-w / 4, w / 4]) cyl(g, Math.min(w / 4, d / 2) - 2, 7, x, H - 7, 0, metal(C.steel), Math.min(w / 4, d / 2));
+      break;
+    }
     case 'rug': box(g, w, 1, d, 0, 0, 0, mat(col || C.rug, { rough: 1 })); break;
     case 'rug_round': cyl(g, hw, 1, 0, 0, 0, mat(col || C.rug, { rough: 1 })); break;
     case 'radiator': {

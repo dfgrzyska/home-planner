@@ -1,6 +1,6 @@
 {
   "comfy_url": "http://127.0.0.1:8188",
   "comfy_dir": null,
-  "workflow": "qwen-edit-gguf",
+  "workflow": "qwen-image-2.1",
   "negative": "cartoon, 3d render, cgi, illustration, blurry, low quality, distorted geometry, warped walls, extra furniture, text, watermark"
 }

@@ -21,6 +21,9 @@ Rzut jest odwzorowany wektorowo w skali 1:1 w centymetrach na podstawie rzutu 1:
 - Cofnij/ponów (Ctrl+Z / Ctrl+Y), skróty klawiszowe (R, Q/E, strzałki, Del, Ctrl+D, F, spacja).
 - **Widok 3D** (Three.js, ładowany z CDN dopiero po przełączeniu): ściany 272 cm, obniżenie sufitu 249 cm, otwory okien
   i drzwi, meble jako bryły, gotowe ujęcia kamery, przekrój, eksport PNG. Meble można zaznaczać i przesuwać także w 3D.
+- **Drzwi do konfiguracji** (kliknij drzwi na rzucie): zawiasy na drugą stronę, otwieranie do drugiego pomieszczenia,
+  typ – skrzydłowe, ukryte (zlicowane ze ścianą, w kolorze ściany), przesuwne naścienne, sam otwór – i kolor skrzydła.
+- **Zwierzęta**: legowiska dobrane do wagi psa (labrador 35 kg → XL 110 × 85 cm), stojak z miskami.
 - **Wykończenie** (panel po prawej, gdy nic nie jest zaznaczone): kolor ścian i posadzka dla każdego pomieszczenia,
   ściana akcentowa, fronty kuchenne, blat, ramy okien, posadzka balkonu – zapisywane w projekcie i w linku.
 

@@ -269,6 +269,27 @@ export function drawShape(item, def) {
       } else s += line(-hw + 8, 0, hw - 8, 0, 'ln leaf');
       break;
     }
+    case 'pet_bed': {
+      // legowisko z obrzeżem z trzech stron i niższym wejściem z przodu
+      const b = Math.min(14, Math.min(w, d) * 0.16);
+      s += rect(-hw, -hd, w, d, 'body', 12);
+      s += rect(-hw + b, -hd + b, w - 2 * b, d - b - 5, 'body2', 8);
+      s += line(-hw + b, hd - 5, hw - b, hd - 5, 'ln dash');
+      const px = 0, py = 2, k = Math.min(w, d) * 0.06;
+      s += ellipse(px, py + k * 0.8, k * 1.1, k * 0.9, 'ln') + circle(px - k * 1.2, py - k * 0.6, k * 0.42) + circle(px - k * 0.4, py - k * 1.3, k * 0.42) + circle(px + k * 0.4, py - k * 1.3, k * 0.42) + circle(px + k * 1.2, py - k * 0.6, k * 0.42);
+      break;
+    }
+    case 'pet_bed_round': {
+      s += ellipse(0, 0, hw, hd, 'body');
+      s += ellipse(0, 2, hw * 0.72, hd * 0.72, 'body2');
+      break;
+    }
+    case 'pet_bowls': {
+      s += rect(-hw, -hd, w, d, 'body', 4);
+      const r = Math.min(w / 4, d / 2) - 3;
+      s += circle(-w / 4, 0, r, 'body2') + circle(w / 4, 0, r, 'body2');
+      break;
+    }
     case 'lamp': s += circle(0, 0, Math.min(hw, hd), 'body') + line(-hw * 0.7, 0, hw * 0.7, 0) + line(0, -hd * 0.7, 0, hd * 0.7); break;
     case 'rug': s += rect(-hw, -hd, w, d, 'rug', 2) + rect(-hw + 6, -hd + 6, w - 12, d - 12, 'ln dash'); break;
     case 'rug_round': s += ellipse(0, 0, hw, hd, 'rug') + ellipse(0, 0, hw - 6, hd - 6, 'ln dash'); break;

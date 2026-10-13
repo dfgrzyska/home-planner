@@ -14,6 +14,7 @@ export const CATEGORIES = [
   { id: 'przedpokoj', name: 'Przedpokój' },
   { id: 'biuro', name: 'Gabinet / dziecko' },
   { id: 'balkon', name: 'Balkon' },
+  { id: 'zwierzeta', name: 'Zwierzęta' },
   { id: 'inne', name: 'Inne' },
 ];
 
@@ -22,9 +23,12 @@ export const CATALOG = [
   { key: 'sofa3', name: 'Sofa 3-osobowa', cat: 'salon', kind: 'sofa', w: 210, d: 90,
     variants: [{ l: '190 × 90', w: 190, d: 90 }, { l: '210 × 90', w: 210, d: 90 }, { l: '230 × 95', w: 230, d: 95 }] },
   { key: 'sofa2', name: 'Sofa 2-osobowa', cat: 'salon', kind: 'sofa', w: 160, d: 88 },
-  { key: 'sofa_l', name: 'Narożnik (L)', cat: 'salon', kind: 'sofa_l', w: 260, d: 170,
+  { key: 'sofa_l', name: 'Narożnik prawy', hint: 'szezlong po prawej, patrząc na front', cat: 'salon', kind: 'sofa_l', w: 260, d: 170,
     variants: [{ l: '240 × 160', w: 240, d: 160 }, { l: '260 × 170', w: 260, d: 170 }, { l: '280 × 180', w: 280, d: 180 }, { l: '300 × 200', w: 300, d: 200 }],
     opts: { mirror: false } },
+  { key: 'sofa_l_left', name: 'Narożnik lewy', hint: 'szezlong po lewej, patrząc na front', cat: 'salon', kind: 'sofa_l', w: 260, d: 170,
+    variants: [{ l: '240 × 160', w: 240, d: 160 }, { l: '260 × 170', w: 260, d: 170 }, { l: '280 × 180', w: 280, d: 180 }, { l: '300 × 200', w: 300, d: 200 }],
+    opts: { mirror: true } },
   { key: 'armchair', name: 'Fotel', cat: 'salon', kind: 'armchair', w: 80, d: 80 },
   { key: 'coffee_table', name: 'Stolik kawowy', cat: 'salon', kind: 'table', w: 100, d: 60,
     variants: [{ l: '90 × 60', w: 90, d: 60 }, { l: '100 × 60', w: 100, d: 60 }, { l: '120 × 70', w: 120, d: 70 }] },
@@ -124,6 +128,20 @@ export const CATALOG = [
   { key: 'lounger', name: 'Leżak', cat: 'balkon', kind: 'lounger', w: 65, d: 190 },
   { key: 'b_sofa', name: 'Sofa ogrodowa', cat: 'balkon', kind: 'sofa', w: 150, d: 70 },
   { key: 'planter', name: 'Donica', cat: 'balkon', kind: 'plant', w: 80, d: 30 },
+
+  // Zwierzęta – legowisko dobierane do psa: długość ≈ długość psa leżącego na boku (nos–nasada ogona) + 15–20 cm.
+  // Labrador 35 kg ≈ 95–105 cm → 110 × 85 cm (XL).
+  { key: 'dog_bed', name: 'Legowisko dla psa', hint: 'labrador 35 kg → XL 110 × 85', cat: 'zwierzeta', kind: 'pet_bed', w: 110, d: 85,
+    variants: [
+      { l: 'L 100 × 70 – pies do 25 kg', w: 100, d: 70 },
+      { l: 'XL 110 × 85 – labrador 30–38 kg (zalecane)', w: 110, d: 85 },
+      { l: 'XXL 120 × 95 – dla psa, który lubi się rozciągać', w: 120, d: 95 },
+      { l: 'XXXL 140 × 105 – pies 40 kg+', w: 140, d: 105 },
+    ], defaultVariant: 1 },
+  { key: 'dog_bed_round', name: 'Legowisko okrągłe', hint: 'labrador 35 kg → Ø 110', cat: 'zwierzeta', kind: 'pet_bed_round', w: 110, d: 110, square: true,
+    variants: [{ l: 'Ø 90 – pies do 25 kg', w: 90, d: 90 }, { l: 'Ø 110 – labrador 30–38 kg (zalecane)', w: 110, d: 110 }, { l: 'Ø 120', w: 120, d: 120 }],
+    defaultVariant: 1 },
+  { key: 'dog_bowls', name: 'Stojak z miskami', cat: 'zwierzeta', kind: 'pet_bowls', w: 50, d: 28 },
 
   // Inne
   { key: 'rug', name: 'Dywan', cat: 'inne', kind: 'rug', w: 160, d: 230, layer: 0,

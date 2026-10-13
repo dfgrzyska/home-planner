@@ -11,6 +11,7 @@ import { CATALOG_BY_KEY } from './catalog.js';
 import { FLOORS, COUNTERS, FRAMES } from './style.js';
 import { floorCanvas } from './textures.js';
 import { buildFurniture, elevationOf, mat } from './furniture3d.js';
+import { doorOptions, doorGeometry, dirOf, isClosed, DOOR_FINISHES } from './doors.js';
 
 const M = 0.01;
 const REVEAL = '#f1f0ec';
@@ -105,18 +106,20 @@ class QuadBatch {
   }
 }
 
+// Kolor lica ściany: region po stronie lica + strona bryły (lico 'n' bryły to ściana południowa pokoju powyżej)
+const ROOM_SIDE = { n: 's', s: 'n', e: 'w', w: 'e' };
+function wallColor(style, region, side) {
+  if (region === 'gap') return REVEAL;
+  if (region === 'out' || region == null) return FACADE;
+  const accent = style.accent;
+  if (accent && accent.room === region && accent.side === ROOM_SIDE[side]) return accent.color;
+  return style.walls[region] || REVEAL;
+}
+
 function wallFaces(doc, style, cut) {
   const solids = collectSolids(doc, cut);
   const batch = new QuadBatch();
-  const accent = style.accent;
-  // strona ściany pomieszczenia, którą tworzy dana ściana bryły (lico 'n' bryły to ściana południowa pokoju powyżej)
-  const roomSide = { n: 's', s: 'n', e: 'w', w: 'e' };
-  const colorFor = (region, side) => {
-    if (region === 'gap') return REVEAL;
-    if (region === 'out' || region == null) return FACADE;
-    if (accent && accent.room === region && accent.side === roomSide[side]) return accent.color;
-    return style.walls[region] || REVEAL;
-  };
+  const colorFor = (region, side) => wallColor(style, region, side);
   const STEP = 2;
   for (const S of solids) {
     const [x, y, w, h] = S.rect;
@@ -274,7 +277,7 @@ export class View3D {
   // ------------------------------------------------ budowanie sceny
 
   setData(doc, style) {
-    const sKey = JSON.stringify([doc.demo, style, this.opts.cut]);
+    const sKey = JSON.stringify([doc.demo, style, doc.doors, this.opts.cut]);
     if (sKey !== this.structKey) { this.structKey = sKey; this.buildStructure(doc, style); }
     const fKey = JSON.stringify([doc.items, style.kitchenFront, style.counter]);
     if (fKey !== this.furnKey) { this.furnKey = fKey; this.buildFurniture(doc, style); }
@@ -356,21 +359,17 @@ export class View3D {
       this.structure.add(g);
     }
 
-    // drzwi (skrzydła otwarte jak na rzucie)
+    // drzwi wg ustawień: skrzydłowe / ukryte / przesuwne / sam otwór
+    this.doorNodes = new Map();
     const hidden = PLAN.partitions.filter((p) => p.door && doc.demo.includes(p.id)).map((p) => p.door);
     for (const d of PLAN.doors) {
       if (hidden.includes(d.id)) continue;
-      const leafH = Math.min(PLAN.doorHeight - 2, cut || 1e9);
-      const leaf = new THREE.Mesh(new THREE.BoxGeometry(d.r * M, leafH * M, 4 * M), mat(d.entry ? '#5b534b' : '#f4f3ef', { rough: 0.5 }));
-      const a = (d.open * Math.PI) / 180;
-      leaf.position.set((d.hinge[0] + (Math.cos(a) * d.r) / 2) * M, (leafH / 2) * M, (d.hinge[1] + (Math.sin(a) * d.r) / 2) * M);
-      leaf.rotation.y = -a;
-      leaf.castShadow = true; leaf.receiveShadow = true;
-      this.structure.add(leaf);
-      const handle = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 0.07), mat('#9a9da1', { rough: 0.3, metal: 0.9 }));
-      handle.position.set((d.hinge[0] + Math.cos(a) * (d.r - 8)) * M, 1.0, (d.hinge[1] + Math.sin(a) * (d.r - 8)) * M);
-      handle.rotation.y = -a;
-      this.structure.add(handle);
+      const node = this.buildDoor(d, doorOptions(doc.doors, d.id), style, cut);
+      if (!node) continue;
+      node.userData.door = d.id;
+      node.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
+      this.structure.add(node);
+      this.doorNodes.set(d.id, node);
     }
 
     // balustrada balkonu
@@ -392,6 +391,95 @@ export class View3D {
     ground.receiveShadow = true;
     this.structure.add(ground);
   }
+
+  buildDoor(d, opt, style, cut) {
+    if (opt.type === 'none') return null;
+    const g = doorGeometry(d, opt);
+    const H = Math.min(PLAN.doorHeight - 1, cut || 1e9);
+    const group = new THREE.Group();
+    const [hx, hy] = g.hinge;
+    const [cdx, cdy] = dirOf(g.closed), [odx, ody] = dirOf(g.open);
+    const finish = mat(DOOR_FINISHES[opt.finish].hex, { rough: 0.5 });
+    const steel = mat('#9a9da1', { rough: 0.3, metal: 0.9 });
+    const leafBox = (len, thick, m) => new THREE.Mesh(new THREE.BoxGeometry(len * M, H * M, thick * M), m);
+
+    if (opt.type === 'hidden' && isClosed(opt)) {
+      // skrzydło wypełnia otwór na całą grubość ściany, każde lico w kolorze ściany po swojej stronie
+      const [gx, gy, gw, gh] = g.gap;
+      const cx = gx + gw / 2, cy = gy + gh / 2;
+      const face = (px, py, side) => mat(wallColor(style, regionAt(px, py), side), { rough: 0.92 });
+      const mats = [
+        face(gx + gw + 3, cy, 'e'), face(gx - 3, cy, 'w'), mat(REVEAL), mat(REVEAL),
+        face(cx, gy + gh + 3, 's'), face(cx, gy - 3, 'n'),
+      ];
+      const leaf = new THREE.Mesh(new THREE.BoxGeometry((gw - 0.6) * M, H * M, (gh - 0.6) * M), mats);
+      leaf.position.set(cx * M, (H / 2) * M, cy * M);
+      const seams = new THREE.LineSegments(new THREE.EdgesGeometry(leaf.geometry), new THREE.LineBasicMaterial({ color: '#9b9b98' }));
+      leaf.add(seams);
+      group.add(leaf);
+      const k = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.12, 0.012), steel);
+      k.position.set((hx + cdx * (g.r - 8) + odx * 0.6) * M, 1.0, (hy + cdy * (g.r - 8) + ody * 0.6) * M);
+      group.add(k);
+      return group;
+    }
+
+    if (opt.type === 'sliding') {
+      // skrzydło na ścianie po stronie otwierania: odsunięte za zawias (otwarte) albo na otworze (zamknięte)
+      const len = g.r + 8, off = 3;
+      const closed = isClosed(opt);
+      const start = closed ? -4 : -(g.r + 4);
+      const mid = start + len / 2;
+      const leaf = leafBox(len, 4, finish);
+      leaf.position.set((hx + cdx * mid + odx * off) * M, (H / 2 + 1) * M, (hy + cdy * mid + ody * off) * M);
+      leaf.rotation.y = (-g.closed * Math.PI) / 180;
+      group.add(leaf);
+      const railLen = 2 * g.r + 16, rmid = -(g.r + 8) + railLen / 2;
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(railLen * M, 0.04, 0.03), mat('#2c2c2e', { rough: 0.4, metal: 0.7 }));
+      rail.position.set((hx + cdx * rmid + odx * off) * M, (H + 4) * M, (hy + cdy * rmid + ody * off) * M);
+      rail.rotation.y = leaf.rotation.y;
+      group.add(rail);
+      const handle = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.3, 0.03), steel);
+      const hpos = start + len - 10;
+      handle.position.set((hx + cdx * hpos + odx * (off + 3.5)) * M, 1.0, (hy + cdy * hpos + ody * (off + 3.5)) * M);
+      group.add(handle);
+      return group;
+    }
+
+    // skrzydłowe (oraz ukryte w pozycji otwartej)
+    const leafM = opt.type === 'hidden'
+      ? mat(wallColor(style, regionAt(hx + odx * 20, hy + ody * 20), 'n'), { rough: 0.92 })
+      : finish;
+    const closed = isClosed(opt);
+    const ang = closed ? g.closed : g.open;
+    const [ax, ay] = dirOf(ang);
+    const back = closed ? 2 : 0; // zamknięte: skrzydło 2 cm w głąb otworu od lica po stronie otwierania
+    const leaf = leafBox(g.r, 4, leafM);
+    leaf.position.set((hx + (ax * g.r) / 2 - odx * back) * M, (H / 2) * M, (hy + (ay * g.r) / 2 - ody * back) * M);
+    leaf.rotation.y = (-ang * Math.PI) / 180;
+    group.add(leaf);
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 0.07), steel);
+    handle.position.set((hx + ax * (g.r - 8) - odx * back) * M, 1.0, (hy + ay * (g.r - 8) - ody * back) * M);
+    handle.rotation.y = leaf.rotation.y;
+    group.add(handle);
+    if (opt.type === 'swing') {
+      // opaski po obu stronach otworu
+      const [gx, gy, gw, gh] = g.gap;
+      const vertical = gh > gw;
+      const t = 6, depth = (vertical ? gw : gh) + 2, along = vertical ? gh : gw;
+      const a0 = vertical ? gy : gx;
+      const trim = (a, y0, lw, lh) => {
+        const b = new THREE.Mesh(new THREE.BoxGeometry((vertical ? depth : lw) * M, lh * M, (vertical ? lw : depth) * M), finish);
+        b.position.set((vertical ? gx + gw / 2 : a) * M, (y0 + lh / 2) * M, (vertical ? a : gy + gh / 2) * M);
+        group.add(b);
+      };
+      trim(a0 - t / 2 + 1, 0, t, H + t);
+      trim(a0 + along + t / 2 - 1, 0, t, H + t);
+      trim(a0 + along / 2, H, along + 2 * t - 2, t);
+    }
+    return group;
+  }
+
+  setSelectedDoor(id) { this.selectedDoor = id; this.updateSelection(); this.dirty = true; }
 
   buildFurniture(doc, style) {
     this.clear(this.furniture);
@@ -427,7 +515,7 @@ export class View3D {
 
   updateSelection() {
     this.clear(this.helpers);
-    const g = this.nodes && this.nodes.get(this.selectedId);
+    const g = (this.nodes && this.nodes.get(this.selectedId)) || (this.doorNodes && this.doorNodes.get(this.selectedDoor));
     if (!g) return;
     const box = new THREE.Box3().setFromObject(g);
     const helper = new THREE.Box3Helper(box, new THREE.Color('#2f6fde'));
@@ -541,13 +629,15 @@ export class View3D {
     let drag = null;
     el.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
-      const hits = this.pick(e).intersectObjects(this.furniture.children, true);
-      let id = null;
+      const doorObjs = this.doorNodes ? [...this.doorNodes.values()] : [];
+      const hits = this.pick(e).intersectObjects([...this.furniture.children, ...doorObjs], true);
+      let id = null, door = null;
       for (const h of hits) {
         let o = h.object;
-        while (o && o.userData.id === undefined) o = o.parent;
-        if (o) { id = o.userData.id; break; }
+        while (o && o.userData.id === undefined && o.userData.door === undefined) o = o.parent;
+        if (o) { id = o.userData.id ?? null; door = o.userData.door ?? null; break; }
       }
+      this.pendingDoor = door;
       this.downAt = [e.clientX, e.clientY];
       if (id != null && id === this.selectedId) {
         const p = this.floorPoint(e);
@@ -571,7 +661,7 @@ export class View3D {
     el.addEventListener('pointerup', (e) => {
       const click = this.downAt && Math.hypot(e.clientX - this.downAt[0], e.clientY - this.downAt[1]) < 4;
       if (drag) { this.controls.enabled = true; if (drag.moved) this.cb.onCommit(); }
-      else if (click) this.cb.onSelect(this.pendingSelect);
+      else if (click) { if (this.pendingDoor) this.cb.onSelectDoor(this.pendingDoor); else this.cb.onSelect(this.pendingSelect); }
       drag = null;
     });
   }

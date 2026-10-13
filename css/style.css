@@ -111,6 +111,12 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 .item-list li:hover { background: #f5f5f2; }
 .item-list li .muted { margin-left: auto; font-size: 12px; font-variant-numeric: tabular-nums; }
 .item-list li.clash { color: var(--danger); }
+.dot.door-dot { --fill: #f4f3ef; border-radius: 2px; }
+.radio-list { display: grid; gap: 2px; }
+.door-btns { display: grid; gap: 6px; margin-top: 4px; }
+.door-btns .btn { text-align: left; }
+.note { font-size: 12.5px; color: var(--muted); background: #f6f5f1; border-radius: 6px; padding: 8px 10px; margin: 8px 0; }
+.seg button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .dot { width: 10px; height: 10px; border-radius: 3px; background: var(--fill); border: 1px solid #9a9ca2; flex: none; }
 .help dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: 12px; margin: 0; }
 .help dt { color: var(--text); font-weight: 600; }
@@ -147,6 +153,15 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 .mullion { fill: #333; }
 .door-leaf { stroke: #222; stroke-width: 2.2; vector-effect: non-scaling-stroke; stroke-linecap: square; }
 .door-swing { fill: none; stroke: #555; stroke-width: .8; vector-effect: non-scaling-stroke; }
+.door-hit { fill: transparent; pointer-events: all; cursor: pointer; }
+.door:hover .door-hit { fill: rgba(47,111,222,.06); }
+.door.selected .door-hit { fill: rgba(47,111,222,.12); }
+.door.selected .door-leaf { stroke: var(--accent); }
+.door-hidden .door-swing { stroke-dasharray: 2 3; }
+.door-hidden .door-leaf { stroke-width: 1.4; }
+.door-leaf.slide { stroke-width: 3.2; }
+.door-swing.dashed { stroke-dasharray: 5 4; }
+.door-tag { font-size: 9px; fill: #6d6f75; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
 .entry-arrow { fill: #fff; stroke: #444; stroke-width: 1; vector-effect: non-scaling-stroke; }
 .entry-label { font-size: 11px; fill: #555; text-anchor: middle; }
 .soffit { stroke: #8a8a8a; stroke-width: 1; stroke-dasharray: 8 5; vector-effect: non-scaling-stroke; }
@@ -173,6 +188,7 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 .cat-biuro { --fill: #f3ead0; }
 .cat-balkon { --fill: #e1ecd5; }
 .cat-inne { --fill: #e9e9e6; }
+.cat-zwierzeta { --fill: #e7dccb; }
 .item .body { fill: var(--fill); stroke: #3a3d44; stroke-width: 1.2; vector-effect: non-scaling-stroke; }
 .item .body2 { fill: color-mix(in srgb, var(--fill) 70%, #ffffff); stroke: #3a3d44; stroke-width: .8; vector-effect: non-scaling-stroke; }
 .item .ln { fill: none; stroke: #3a3d44; stroke-width: .8; vector-effect: non-scaling-stroke; }

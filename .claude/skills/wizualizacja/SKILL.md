@@ -23,7 +23,7 @@ Folder wyników: `renders/<RRRR-MM-DD-GGMM>-<krótki-opis>/` (katalog `renders/`
 
 ## 2. Ustaw wykończenie – układ zostaw nietknięty
 
-Zmieniaj **tylko** `style` oraz kolory mebli (`items[].c`). Nie ruszaj `x`, `y`, `r`, `w`, `d`, `t`, `demo`.
+Zmieniaj **tylko** `style`, `doors` (wykończenie/typ) oraz kolory mebli (`items[].c`). Nie ruszaj `x`, `y`, `r`, `w`, `d`, `t`, `demo`.
 
 `style` (walidowane przez `normalizeStyle` w `js/style.js`):
 
@@ -36,6 +36,8 @@ Zmieniaj **tylko** `style` oraz kolory mebli (`items[].c`). Nie ruszaj `x`, `y`,
 | `counter` | `oak`, `white_quartz`, `black_stone`, `concrete`, `marble` |
 | `frames` | `anthracite`, `white`, `black` (ramy okien) |
 | `accent` | opcjonalnie `{"room": "1", "side": "n"/"s"/"e"/"w", "color": "#rrggbb"}` – ściana akcentowa (n = od klatki, s = od balkonu, e = wschodnia z oknami, w = zachodnia) |
+
+Drzwi (`doors`, obok `style` w dokumencie): `{"d1".."d4": {"type": "swing"|"hidden"|"sliding"|"none", "finish": "white"|"oak"|"walnut"|"graphite"|"black"|"entrance", "flipHinge": bool, "flipSwing": bool, "closed": bool}}` – d1 wejściowe, d2 łazienka, d3 pokój 2, d4 pokój 3 (`js/doors.js`). Zmieniaj tylko `finish`/`type`, gdy opis o to prosi („drzwi dębowe”, „drzwi ukryte w kolorze ściany”); kierunku otwierania nie ruszaj. Do zdjęć warto ustawić `closed: true` dla drzwi widocznych w kadrze.
 
 Nazwy kolorów z palety aplikacji (`WALL_PALETTE`, `FRONTS` w `js/style.js`) – użyj ich, gdy pasują do opisu, inaczej dobierz hex sam.
 Kolor mebla: `c` w elemencie (sofa – tkanina, stół/szafki – materiał frontu/blatu, dywan – kolor dywanu). Typy elementów: `t` (klucze z `js/catalog.js`).
@@ -87,7 +89,7 @@ Opisuj tylko to, co widać w danym ujęciu (kolor ścian właściwego pomieszcze
 python tools/comfy.py --image renders/<folder>/kitchen_3d.png --prompt-file renders/<folder>/kitchen_prompt.txt --out renders/<folder>/kitchen_photo.png [--count 2] [--workflow qwen-image-2.1 --ref inspiracja.jpg]
 ```
 
-- Czas: ok. 5 min na obraz z `qwen-edit-gguf` (20B, RTX 5060 Ti) – uruchamiaj w tle, gdy ujęć jest kilka, i informuj użytkownika o postępie.
+- Czas na RTX 5060 Ti: ok. 45 s na obraz 1600×900 z `qwen-image-2.1` (domyślny), ok. 5 min na obraz 1 MP z `qwen-edit-gguf`. Przy kilku ujęciach uruchamiaj w tle i informuj użytkownika o postępie.
 - `--count N` daje N wariantów z różnymi seedami; `--seed` pozwala powtórzyć wynik.
 - `--ref` (obraz inspiracji) działa tylko z `qwen-image-2.1`.
 
@@ -99,5 +101,5 @@ Pokaż użytkownikowi pary render 3D → zdjęcie (SendUserFile, `_photo.png` na
 
 Szablony w `tools/workflows/*.json` (format API ComfyUI, pola `{{IMAGE}}`, `{{PROMPT}}`, `{{NEGATIVE}}`, `{{SEED}}`, `{{REF}}`). Domyślny workflow i adres serwera: `tools/config.json`, lokalne nadpisania: `tools/config.local.json`.
 
-- `qwen-edit-gguf` – Qwen-Image-Edit (sierpień 2025, GGUF Q5) – zainstalowany, przetestowany.
-- `qwen-image-2.1` – Qwen-Image 2.1 (wrzesień 2026, 7B, szybszy, przyjmuje obrazy referencyjne). Wymaga aktualizacji ComfyUI i modeli z `huggingface.co/Comfy-Org/Qwen-Image-2.1`; szablon odtworzony z oficjalnego workflow – przy pierwszym użyciu sprawdź `--check` i ewentualnie popraw nazwy wejść według `/object_info`.
+- `qwen-image-2.1` (domyślny) – Qwen-Image 2.1 (wrzesień 2026, 7B): pełna rozdzielczość renderu, bardzo wierny geometrii, przyjmuje obraz inspiracji (`--ref`). Modele z `huggingface.co/Comfy-Org/Qwen-Image-2.1`, ComfyUI ≥ v0.39.
+- `qwen-edit-gguf` – starszy Qwen-Image-Edit (sierpień 2025, GGUF Q5, 1 MP, ~5 min) – zapasowy.

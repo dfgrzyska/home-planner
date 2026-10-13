@@ -4,6 +4,7 @@ import { drawShape } from './shapes.js';
 import { store, encodeDoc, decodeDoc, buildShareUrl, readHashCode, readHashParams } from './storage.js';
 import { normalizeStyle, WALL_PALETTE, FLOORS, FRONTS, COUNTERS, FRAMES, paletteName } from './style.js';
 import { heightOf, elevationOf } from './dims3d.js';
+import { DOOR_TYPES, DOOR_FINISHES, DOOR_NAMES, doorOptions, normalizeDoors, doorGeometry, dirOf, isClosed } from './doors.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const $ = (sel, el = document) => el.querySelector(sel);
@@ -13,7 +14,8 @@ const norm360 = (a) => ((Math.round(a * 10) / 10) % 360 + 360) % 360;
 
 // ---------------------------------------------------------------- stan
 
-let doc = { v: 1, plan: PLAN.id, items: [], demo: [], style: normalizeStyle() };
+let doc = { v: 1, plan: PLAN.id, items: [], demo: [], style: normalizeStyle(), doors: {} };
+let selectedDoor = null;
 const hashParams = readHashParams(); // v=3d, cam=…, shot=1 (tryb zrzutu dla skryptów)
 const shotMode = hashParams.shot === '1';
 let nextId = 1;
@@ -69,6 +71,7 @@ function loadDoc(d, { keepHistory = false } = {}) {
     items: items.map((i) => normalizeItem({ ...i, id: keepHistory ? i.id : undefined })),
     demo: Array.isArray(d && d.demo) ? d.demo.filter((id) => PLAN.partitions.some((p) => p.id === id)) : [],
     style: normalizeStyle(d && d.style),
+    doors: normalizeDoors(d && d.doors),
   };
   if (!keepHistory) {
     undoStack.length = 0; redoStack.length = 0;
@@ -82,7 +85,7 @@ function loadDoc(d, { keepHistory = false } = {}) {
 // Dokument do udostępnienia: bez identyfikatorów, liczby zaokrąglone
 function exportDoc() {
   return {
-    v: 1, plan: PLAN.id, demo: doc.demo, style: doc.style,
+    v: 1, plan: PLAN.id, demo: doc.demo, style: doc.style, doors: doc.doors,
     items: doc.items.map(({ id, ...rest }) => ({ ...rest, x: r1(rest.x), y: r1(rest.y) })),
   };
 }
@@ -306,13 +309,9 @@ function renderStructure() {
   const hiddenDoors = PLAN.partitions.filter((p) => p.door && doc.demo.includes(p.id)).map((p) => p.door);
   for (const d of PLAN.doors) {
     if (hiddenDoors.includes(d.id)) continue;
-    const [hx, hy] = d.hinge;
-    const pt = (deg) => [hx + d.r * Math.cos((deg * Math.PI) / 180), hy + d.r * Math.sin((deg * Math.PI) / 180)];
-    const [ox, oy] = pt(d.open), [cx, cy] = pt(d.closed);
-    const delta = ((d.closed - d.open + 540) % 360) - 180;
-    s += `<path class="door-swing" d="M${r1(ox)} ${r1(oy)} A${d.r} ${d.r} 0 0 ${delta > 0 ? 1 : 0} ${r1(cx)} ${r1(cy)}"/>`;
-    s += `<line class="door-leaf" x1="${hx}" y1="${hy}" x2="${r1(ox)}" y2="${r1(oy)}"/>`;
+    s += doorSvg(d);
     if (d.entry) {
+      const [hx, hy] = d.hinge;
       s += `<path class="entry-arrow" d="M${hx - 75} ${hy + 30} h22 v-10 l18 22 l-18 22 v-10 h-22 z"/>`;
       s += `<text class="entry-label" x="${hx - 64}" y="${hy + 86}">wejście</text>`;
     }
@@ -336,6 +335,46 @@ function renderStructure() {
   }
   L.labels.innerHTML = lab;
   sync3d();
+}
+
+// Drzwi wg ustawień użytkownika: skrzydłowe, ukryte, przesuwne albo sam otwór
+function doorSvg(d) {
+  const opt = doorOptions(doc.doors, d.id);
+  const g = doorGeometry(d, opt);
+  const [hx, hy] = g.hinge;
+  const at = (deg, r = g.r) => { const [dx, dy] = dirOf(deg); return [r1(hx + dx * r), r1(hy + dy * r)]; };
+  const [gx, gy, gw, gh] = g.gap;
+  let s = `<g class="door door-${opt.type}${selectedDoor === d.id ? ' selected' : ''}" data-door="${d.id}">`;
+  s += `<rect class="door-hit" x="${gx}" y="${gy}" width="${gw}" height="${gh}"/>`;
+  if (opt.type === 'swing' || opt.type === 'hidden') {
+    const [ox, oy] = at(g.open), [cx, cy] = at(g.closed);
+    const sweep = (((g.closed - g.open + 540) % 360) - 180) > 0 ? 1 : 0;
+    s += `<path class="door-hit" d="M${r1(hx)} ${r1(hy)} L${ox} ${oy} A${g.r} ${g.r} 0 0 ${sweep} ${cx} ${cy} Z"/>`;
+    s += `<path class="door-swing" d="M${ox} ${oy} A${g.r} ${g.r} 0 0 ${sweep} ${cx} ${cy}"/>`;
+    s += `<line class="door-leaf" x1="${r1(hx)}" y1="${r1(hy)}" x2="${ox}" y2="${oy}"/>`;
+    if (opt.type === 'hidden') {
+      const [mx, my] = at(g.closed, g.r / 2);
+      const [ux, uy] = dirOf(g.open);
+      s += `<text class="door-tag" x="${r1(mx + ux * 16)}" y="${r1(my + uy * 16)}">ukryte</text>`;
+    }
+  } else if (opt.type === 'sliding') {
+    // skrzydło odsunięte na ścianę obok otworu (po stronie zawiasu), szyna nad otworem
+    const [cdx, cdy] = dirOf(g.closed), [odx, ody] = dirOf(g.open);
+    const ax = hx + odx * 4, ay = hy + ody * 4;
+    const p1 = [r1(ax - cdx * (g.r + 4)), r1(ay - cdy * (g.r + 4))], p2 = [r1(ax + cdx * 4), r1(ay + cdy * 4)];
+    const rail = [r1(ax + cdx * (g.r + 2)), r1(ay + cdy * (g.r + 2))];
+    s += `<path class="door-hit" d="M${p1[0] + odx * 8} ${p1[1] + ody * 8} L${rail[0] + odx * 8} ${rail[1] + ody * 8} L${rail[0] - odx * 6} ${rail[1] - ody * 6} L${p1[0] - odx * 6} ${p1[1] - ody * 6} Z"/>`;
+    s += `<line class="door-swing dashed" x1="${p1[0]}" y1="${p1[1]}" x2="${rail[0]}" y2="${rail[1]}"/>`;
+    s += `<line class="door-leaf slide" x1="${p1[0]}" y1="${p1[1]}" x2="${p2[0]}" y2="${p2[1]}"/>`;
+    const [mx, my] = [(p1[0] + p2[0]) / 2 + odx * 12, (p1[1] + p2[1]) / 2 + ody * 12];
+    s += `<text class="door-tag" x="${r1(mx)}" y="${r1(my)}">przesuwne</text>`;
+  }
+  return s + '</g>';
+}
+
+function roomAt(x, y) {
+  for (const r of PLAN.rooms) for (const [fx, fy, fw, fh] of r.floor) if (x >= fx && x <= fx + fw && y >= fy && y <= fy + fh) return r;
+  return null;
 }
 
 function renderDims() {
@@ -444,7 +483,17 @@ function renderAll() {
 
 // ---------------------------------------------------------------- operacje na elementach
 
+function selectDoor(id) {
+  selectedDoor = id;
+  selectedId = null;
+  renderStructure();
+  renderSelection();
+  renderPanel();
+  if (view3d) { view3d.setSelected(null); view3d.setSelectedDoor(id); }
+}
+
 function select(id) {
+  if (selectedDoor) { selectedDoor = null; renderStructure(); if (view3d) view3d.setSelectedDoor(null); }
   selectedId = id;
   for (const g of svg.querySelectorAll('.item.selected')) g.classList.remove('selected');
   if (id) { const g = svg.querySelector(`.item[data-id="${id}"]`); if (g) g.classList.add('selected'); }
@@ -523,6 +572,7 @@ function renderPanelPosition() {
 }
 
 function renderPanel() {
+  if (selectedDoor) { renderPanelDoor(); return; }
   const it = getItem(selectedId);
   if (!it) { renderPanelApartment(); return; }
   const def = defOf(it);
@@ -563,7 +613,11 @@ function renderPanel() {
     `<button class="btn" data-rot="90" title="R">⟳ 90°</button></div></label>`;
   const checks = [];
   if (def.opts && 'chairs' in def.opts) checks.push(['chairs', 'Pokaż krzesła']);
-  if (def.opts && 'mirror' in def.opts) checks.push(['mirror', 'Odbicie lustrzane']);
+  if (def.opts && 'mirror' in def.opts) {
+    const left = !!o.mirror;
+    const label = def.kind === 'sofa_l' ? 'Szezlong (patrząc na front)' : 'Ramię narożnika (patrząc na front)';
+    h += `<div class="field"><span>${label}</span><div class="seg"><button data-side="left" class="${left ? 'on' : ''}">po lewej</button><button data-side="right" class="${left ? '' : 'on'}">po prawej</button></div></div>`;
+  }
   checks.push(['lock', 'Zablokuj pozycję']);
   h += `<div class="checks">` + checks.map(([key, label]) =>
     `<label class="check"><input type="checkbox" data-opt="${key}"${o[key] ? ' checked' : ''}> ${label}</label>`).join('') + `</div>`;
@@ -600,6 +654,10 @@ function renderPanel() {
     for (const b of panel.querySelectorAll('[data-len]')) b.onclick = () => { it.w = +b.dataset.len; renderItems(); renderSelection(); renderPanel(); commit(); };
   }
   for (const b of panel.querySelectorAll('[data-rot]')) b.onclick = () => rotateSelected(+b.dataset.rot);
+  for (const b of panel.querySelectorAll('[data-side]')) b.onclick = () => {
+    it.o = { ...(it.o || {}), mirror: b.dataset.side === 'left' };
+    renderItems(); renderSelection(); renderPanel(); commit();
+  };
   for (const c of panel.querySelectorAll('[data-opt]')) c.onchange = () => {
     it.o = { ...(it.o || {}), [c.dataset.opt]: c.checked };
     renderItems(); renderSelection(); commit();
@@ -630,6 +688,13 @@ function renderPanelApartment() {
     h += `<label class="check"><input type="checkbox" data-demo="${p.id}"${doc.demo.includes(p.id) ? ' checked' : ''}> ${esc(p.name)}</label>`;
   }
 
+  h += `<h3>Drzwi</h3><ul class="item-list">`;
+  for (const d of PLAN.doors) {
+    const opt = doorOptions(doc.doors, d.id);
+    h += `<li data-door-select="${d.id}"><span class="dot door-dot"></span>${esc(DOOR_NAMES[d.id])}<span class="muted">${esc(DOOR_TYPES[opt.type].split(' –')[0])}</span></li>`;
+  }
+  h += `</ul>`;
+
   const counts = {};
   h += `<h3>Na planie <span class="muted">(${doc.items.length})</span></h3>`;
   if (!doc.items.length) h += `<p class="muted">Przeciągnij elementy z katalogu po lewej na rzut.</p>`;
@@ -652,7 +717,55 @@ function renderPanelApartment() {
     renderStructure(); renderItems(); renderPanel(); commit();
   };
   for (const li of panel.querySelectorAll('[data-select]')) li.onclick = () => select(+li.dataset.select);
+  for (const li of panel.querySelectorAll('[data-door-select]')) li.onclick = () => selectDoor(li.dataset.doorSelect);
   bindFinish();
+}
+
+// ---------------------------------------------------------------- panel drzwi
+
+function renderPanelDoor() {
+  const d = PLAN.doors.find((x) => x.id === selectedDoor);
+  const opt = doorOptions(doc.doors, d.id);
+  const g = doorGeometry(d, opt);
+  const [ux, uy] = dirOf(g.open);
+  const into = roomAt(g.hinge[0] + ux * 30, g.hinge[1] + uy * 30);
+  const intoName = into ? into.short : (d.entry ? 'klatka schodowa' : '—');
+  const sliding = opt.type === 'sliding', none = opt.type === 'none';
+  let h = `<div class="panel-head"><div><div class="eyebrow">Drzwi</div><h2>${esc(DOOR_NAMES[d.id])}</h2></div>` +
+    `<button class="icon-btn" id="door-close" title="Odznacz (Esc)">✕</button></div>`;
+  h += `<p class="muted">Otwór ${Math.round(g.along)} cm · skrzydło ${d.r} cm · wysokość ${PLAN.doorHeight} cm</p>`;
+  h += `<div class="field"><span>Typ</span><div class="radio-list">` + Object.entries(DOOR_TYPES).map(([k, l]) =>
+    `<label class="check"><input type="radio" name="door-type" value="${k}"${opt.type === k ? ' checked' : ''}> ${esc(l)}</label>`).join('') + `</div></div>`;
+  if (!none) {
+    h += `<div class="field"><span>${sliding ? 'Skrzydło przesuwa się' : 'Otwiera się do'}: <b>${esc(sliding ? `po stronie: ${intoName}` : intoName)}</b></span>` +
+      `<div class="door-btns"><button class="btn" data-flip="hinge">⇄ ${sliding ? 'Przesuw w drugą stronę' : 'Zawiasy na drugą stronę'}</button>` +
+      `<button class="btn" data-flip="swing">⇅ ${sliding ? 'Na drugą stronę ściany' : 'Otwieranie do drugiego pomieszczenia'}</button></div></div>`;
+  }
+  if (opt.type === 'hidden') {
+    h += `<p class="note">Drzwi ukryte są zlicowane ze ścianą, bez opasek i ościeżnicy; skrzydło malowane kolorem ścian po obu stronach (zmienisz go w sekcji Wykończenie).</p>`;
+  } else if (!none) {
+    h += `<div class="finish-label">Skrzydło · <b>${esc(DOOR_FINISHES[opt.finish].name)}</b></div><div class="swatches">` +
+      Object.entries(DOOR_FINISHES).map(([k, f]) => `<button class="swatch${opt.finish === k ? ' on' : ''}" style="--c:${f.hex}" data-finish="${k}" title="${esc(f.name)}"></button>`).join('') + `</div>`;
+  }
+  if (!none) {
+    const closed = isClosed(opt);
+    h += `<div class="field"><span>W widoku 3D</span><div class="seg"><button data-closed="0" class="${closed ? '' : 'on'}">otwarte</button><button data-closed="1" class="${closed ? 'on' : ''}">zamknięte</button></div></div>`;
+  }
+  h += `<div class="actions"><button class="btn" id="door-reset">Przywróć jak na rzucie</button></div>`;
+  panel.innerHTML = h;
+
+  const setDoor = (fn) => {
+    const cur = { ...doorOptions(doc.doors, d.id), ...(doc.doors[d.id] || {}) };
+    fn(cur);
+    doc.doors = normalizeDoors({ ...doc.doors, [d.id]: cur });
+    renderStructure(); renderPanel(); commit();
+  };
+  $('#door-close').onclick = () => select(null);
+  for (const r of panel.querySelectorAll('[name="door-type"]')) r.onchange = () => setDoor((o) => { o.type = r.value; delete o.closed; });
+  for (const b of panel.querySelectorAll('[data-flip]')) b.onclick = () => setDoor((o) => { if (b.dataset.flip === 'hinge') o.flipHinge = !o.flipHinge; else o.flipSwing = !o.flipSwing; });
+  for (const b of panel.querySelectorAll('[data-finish]')) b.onclick = () => setDoor((o) => { o.finish = b.dataset.finish; });
+  for (const b of panel.querySelectorAll('[data-closed]')) b.onclick = () => setDoor((o) => { o.closed = b.dataset.closed === '1'; });
+  $('#door-reset').onclick = () => { const next = { ...doc.doors }; delete next[d.id]; doc.doors = next; renderStructure(); renderPanel(); commit(); };
 }
 
 // ---------------------------------------------------------------- wykończenie (kolory ścian, posadzki…)
@@ -748,8 +861,8 @@ function renderCatalog(filter = '') {
       const w = v ? v.w : c.w, d = v ? v.d : c.d;
       const sz = c.range ? `${c.range.min}–${c.range.max} × ${d}` : c.square ? `Ø ${w}` : `${w} × ${d}`;
       h += `<div class="card cat-${c.cat}" data-key="${c.key}" title="Przeciągnij na plan lub kliknij, aby dodać">` +
-        `<svg class="thumb" viewBox="${-w / 2 - 6} ${-d / 2 - 6} ${w + 12} ${d + 12}" preserveAspectRatio="xMidYMid meet"><g class="item cat-${c.cat}">${drawShape({ w, d, o: {} }, c)}</g></svg>` +
-        `<div class="card-text"><div class="card-name">${esc(c.name)}</div><div class="card-size">${sz} cm${c.variants ? ` · ${c.variants.length} warianty` : ''}</div></div></div>`;
+        `<svg class="thumb" viewBox="${-w / 2 - 6} ${-d / 2 - 6} ${w + 12} ${d + 12}" preserveAspectRatio="xMidYMid meet"><g class="item cat-${c.cat}">${drawShape({ w, d, o: { ...(c.opts || {}), chairs: false } }, c)}</g></svg>` +
+        `<div class="card-text"><div class="card-name">${esc(c.name)}</div><div class="card-size">${c.hint ? esc(c.hint) : `${sz} cm${c.variants ? ` · ${c.variants.length} warianty` : ''}`}</div></div></div>`;
     }
     h += `</div></details>`;
   }
@@ -865,6 +978,12 @@ svg.addEventListener('pointerdown', (e) => {
     if (selectedId !== it.id) select(it.id);
     if (it.o && it.o.lock) { drag = { type: 'pan', sx: e.clientX, sy: e.clientY, tx: view.tx, ty: view.ty, moved: false }; return; }
     drag = { type: 'move', it, ox: wx - it.x, oy: wy - it.y, sx: e.clientX, sy: e.clientY, moved: false };
+    return;
+  }
+  const doorEl = e.target.closest('[data-door]');
+  if (doorEl) {
+    if (selectedDoor !== doorEl.dataset.door) selectDoor(doorEl.dataset.door);
+    drag = { type: 'pan', sx: e.clientX, sy: e.clientY, tx: view.tx, ty: view.ty, moved: false };
     return;
   }
   drag = { type: 'pan', sx: e.clientX, sy: e.clientY, tx: view.tx, ty: view.ty, moved: false, deselect: true };
@@ -1067,6 +1186,7 @@ function replaceDoc(d) {
     items: (d.items || []).map((i) => normalizeItem({ ...i, id: undefined })),
     demo: Array.isArray(d.demo) ? d.demo.filter((id) => PLAN.partitions.some((p) => p.id === id)) : [],
     style: normalizeStyle(d.style),
+    doors: normalizeDoors(d.doors),
   };
   renderAll();
   commit();
@@ -1140,6 +1260,7 @@ async function setViewMode(m) {
       const { View3D } = await import('./view3d.js');
       view3d = new View3D($('#stage3d'), {
         onSelect: (id) => select(id),
+        onSelectDoor: (id) => selectDoor(id),
         onMove: (it, x, y, alt) => {
           const p = alt ? { x: Math.round(x), y: Math.round(y) } : snapPosition(it, x, y);
           it.x = p.x; it.y = p.y;
@@ -1164,6 +1285,7 @@ async function setViewMode(m) {
   if (!is3D) return;
   view3d.setData(doc, doc.style);
   view3d.setSelected(selectedId);
+  view3d.setSelectedDoor(selectedDoor);
   view3d.resize();
   view3d.start();
 }
