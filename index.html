@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Planer mieszkania LM25</title>
+  <meta name="description" content="Interaktywny planer umeblowania mieszkania LM25 – przeciągnij meble na wierny rzut 1:100, zapisz układ i udostępnij linkiem.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='3' width='26' height='26' fill='none' stroke='%23222' stroke-width='4'/%3E%3Crect x='14' y='5' width='3' height='12' fill='%23e8706f'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" width="22" height="22" aria-hidden="true"><rect x="3" y="3" width="26" height="26" fill="none" stroke="currentColor" stroke-width="4"/><rect x="14" y="5" width="3" height="12" fill="#e8706f"/></svg>
+      <div><b>Planer mieszkania</b><span>LM25 · 63,93 m² + balkon 25,70 m²</span></div>
+    </div>
+    <div class="tools">
+      <div class="group">
+        <button class="btn" id="btn-undo" title="Cofnij (Ctrl+Z)" disabled>↶<span class="hide-sm"> Cofnij</span></button>
+        <button class="btn" id="btn-redo" title="Ponów (Ctrl+Y)" disabled>↷<span class="hide-sm"> Ponów</span></button>
+      </div>
+      <div class="group">
+        <button class="btn" id="btn-zoom-out" title="Oddal (−)">−</button>
+        <span id="zoom-label" class="zoom-label">100%</span>
+        <button class="btn" id="btn-zoom-in" title="Przybliż (+)">+</button>
+        <button class="btn" id="btn-fit" title="Dopasuj (F)">Dopasuj</button>
+        <button class="btn" id="btn-measure" title="Miarka (M)">📏<span class="hide-sm"> Miarka</span></button>
+      </div>
+      <details class="dropdown">
+        <summary class="btn">Widok ▾</summary>
+        <div class="dropdown-body">
+          <label class="check"><input type="checkbox" id="opt-dims"> Wymiary z rzutu</label>
+          <label class="check"><input type="checkbox" id="opt-labels"> Nazwy mebli</label>
+          <label class="check"><input type="checkbox" id="opt-dist"> Odległości od ścian</label>
+          <label class="check"><input type="checkbox" id="opt-snap"> Przyciąganie do ścian i mebli</label>
+          <label class="field"><span>Podkład z PDF (kontrola zgodności)</span><input type="range" id="opt-overlay" min="0" max="1" step="0.05"></label>
+        </div>
+      </details>
+      <div class="group">
+        <button class="btn" id="btn-projects">Projekty</button>
+        <button class="btn primary" id="btn-share">Udostępnij link</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar">
+      <div class="search"><input id="catalog-search" type="search" placeholder="Szukaj mebla…" aria-label="Szukaj w katalogu"></div>
+      <div id="catalog" class="catalog"></div>
+      <p class="sidebar-hint">Przeciągnij element na rzut albo kliknij, by dodać na środek widoku.</p>
+    </aside>
+
+    <section class="stage">
+      <svg id="canvas" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="6" class="hatch-line"/>
+          </pattern>
+          <pattern id="tiles" width="37" height="37" patternUnits="userSpaceOnUse">
+            <path d="M37 0 H0 V37" class="tile-line"/>
+          </pattern>
+        </defs>
+        <g id="world">
+          <g id="l-floor"></g>
+          <g id="l-structure"></g>
+          <image id="l-overlay" preserveAspectRatio="none"></image>
+          <g id="l-dims"></g>
+          <g id="l-labels"></g>
+          <g id="l-items0"></g>
+          <g id="l-items1"></g>
+          <g id="l-items2"></g>
+          <g id="l-sel"></g>
+          <g id="l-measure"></g>
+        </g>
+      </svg>
+      <div class="statusbar">
+        <span id="cursor-pos">x 0 · y 0 cm</span>
+        <span class="hide-sm">Skala rzutu 1:100 · wymiary w świetle ścian (cm)</span>
+      </div>
+      <div id="toast" class="toast" hidden></div>
+    </section>
+
+    <aside class="panel" id="panel"></aside>
+  </main>
+
+  <div class="modal" id="modal-share" hidden>
+    <div class="modal-box" role="dialog" aria-labelledby="share-title">
+      <div class="modal-head"><h2 id="share-title">Udostępnij projekt</h2><button class="icon-btn" data-close>✕</button></div>
+      <p class="muted">Cały układ jest zapisany w linku – osoba, która go otworzy, zobaczy dokładnie ten plan i może go dalej edytować u siebie.</p>
+      <div class="share-row"><input id="share-url" type="text" readonly><button class="btn primary" id="btn-copy-link">Kopiuj</button></div>
+      <p class="muted small" id="share-len"></p>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-projects" hidden>
+    <div class="modal-box" role="dialog" aria-labelledby="projects-title">
+      <div class="modal-head"><h2 id="projects-title">Projekty</h2><button class="icon-btn" data-close>✕</button></div>
+      <p class="muted">Bieżący układ zapisuje się automatycznie w przeglądarce. Tu możesz zachować wersje pod nazwą.</p>
+      <form id="form-save" class="share-row"><input id="save-name" type="text" placeholder="Nazwa wersji, np. „Salon z narożnikiem”" maxlength="60"><button class="btn primary" type="submit">Zapisz</button></form>
+      <div id="project-list" class="project-list"></div>
+      <div class="modal-foot">
+        <button class="btn" id="btn-reset-plan">Układ z rzutu dewelopera</button>
+        <button class="btn" id="btn-clear">Wyczyść plan</button>
+        <button class="btn" id="btn-export">Eksport JSON</button>
+        <button class="btn" id="btn-import">Import JSON</button>
+        <input type="file" id="file-import" accept="application/json,.json" hidden>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
