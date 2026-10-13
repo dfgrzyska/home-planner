@@ -57,7 +57,7 @@ def serve_repo():
     return httpd, f"http://127.0.0.1:{httpd.server_address[1]}/"
 
 
-def render(doc: dict, cams, out: Path, size=(1600, 900), base=None) -> list:
+def render(doc: dict, cams, out: Path, size=(1600, 900), base=None, time="day") -> list:
     out.mkdir(parents=True, exist_ok=True)
     browser = find_browser()
     httpd = None
@@ -68,8 +68,9 @@ def render(doc: dict, cams, out: Path, size=(1600, 900), base=None) -> list:
     try:
         with tempfile.TemporaryDirectory(prefix="hp-chrome-") as prof:
             for cam in cams:
-                target = out / f"{cam}_3d.png"
-                url = f"{base.split('#')[0]}#p={code}&shot=1&cam={cam}"
+                suffix = "" if time == "day" else f"_{time}"
+                target = out / f"{cam}{suffix}_3d.png"
+                url = f"{base.split('#')[0]}#p={code}&shot=1&cam={cam}&t={time}"
                 cmd = [
                     browser, "--headless=new", f"--user-data-dir={prof}", "--hide-scrollbars",
                     f"--window-size={size[0]},{size[1]}", "--use-angle=d3d11", "--enable-gpu", "--ignore-gpu-blocklist",
@@ -95,6 +96,7 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--size", default="1600x900")
     ap.add_argument("--base", default=None, help="adres aplikacji (domyślnie lokalny serwer z repozytorium)")
+    ap.add_argument("--time", default="day", choices=["day", "evening", "night"], help="pora dnia: dzień / wieczór / noc (światła Hue)")
     a = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
     if a.doc:
@@ -107,7 +109,7 @@ def main():
     if bad:
         raise SystemExit(f"Nieznane ujęcia: {bad}. Dostępne: {CAMERAS}")
     w, h = (int(v) for v in a.size.lower().split("x"))
-    render(doc, cams, Path(a.out), (w, h), a.base)
+    render(doc, cams, Path(a.out), (w, h), a.base, a.time)
 
 
 if __name__ == "__main__":

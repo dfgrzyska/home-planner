@@ -1,8 +1,185 @@
 // Bryły mebli 3D. Budowane w centymetrach w układzie lokalnym: środek podstawy w (0,0,0),
 // szerokość wzdłuż x, głębokość wzdłuż z (front = +z), wysokość wzdłuż y.
 import * as THREE from 'three';
-import { heightOf } from './dims3d.js';
+import { heightOf, elevationOf } from './dims3d.js';
+import { lightOf } from './lights.js';
+import { slatSpec } from './shapes.js';
 export { heightOf, elevationOf } from './dims3d.js';
+
+// ---------------------------------------------------------------- światło
+
+const glowCache = new Map();
+// Materiał świecącej powierzchni (dioda, klosz, ekran Signe); off = wyłączona
+export function glowMat(color, on = true, k = 1.6) {
+  const key = `${color}|${on}|${k}`;
+  if (!glowCache.has(key)) {
+    const m = new THREE.MeshStandardMaterial({ color: on ? '#ffffff' : '#d8d6d0', roughness: 0.4 });
+    if (on) { m.emissive = new THREE.Color(color); m.emissiveIntensity = k; }
+    m.userData.glow = true;
+    glowCache.set(key, m);
+  }
+  return glowCache.get(key);
+}
+
+const lerpHex = (a, b, t) => '#' + new THREE.Color(a).lerp(new THREE.Color(b), t).getHexString();
+
+// Opis źródeł światła w układzie lokalnym elementu (cm); view3d zamienia je na światła sceny.
+// kind: point | spot (dir = kierunek) | glow (poświata na ścianie: dir = kierunek do ściany, shape = box/up/down)
+function addLight(g, L) { (g.userData.lights ||= []).push(L); }
+
+function stripLights(g, L, len, y, z, vertical) {
+  const n = Math.max(1, Math.min(4, Math.round(len / 150)));
+  for (let i = 0; i < n; i++) {
+    const t = n === 1 ? 0.5 : i / (n - 1);
+    const p = -len / 2 + len * (n === 1 ? 0.5 : 0.1 + 0.8 * t);
+    const color = lerpHex(L.color, L.color2, t);
+    const off = { out: [0, 0, 8], up: [0, 8, 4], down: [0, -8, 4], back: [0, 0, -2] }[L.dir] || [0, 0, 8];
+    const pos = vertical ? [off[0], y + p + len / 2, z + off[2]] : [p + off[0], y + off[1], z + off[2]];
+    addLight(g, { kind: 'point', pos, color, lm: L.lm / n });
+  }
+}
+
+// ---------------------------------------------------------------- rośliny
+
+const leafGeo = new THREE.SphereGeometry(1, 12, 8);
+const GREENS = ['#4f8a3f', '#5b9447', '#447a36', '#6a9e50'];
+function leaf(g, L, W, x, y, z, rotY, tilt, color, thick = 0.12) {
+  const m = new THREE.Mesh(leafGeo, mat(color, { rough: 0.7 }));
+  m.scale.set(W / 2, thick * W / 2, L / 2);
+  m.position.set(x, y, z);
+  m.rotation.set(tilt, rotY, 0, 'YXZ');
+  g.add(m);
+  return m;
+}
+const rnd = (i) => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+
+// łodyga / gałązka między dwoma punktami
+const UP = new THREE.Vector3(0, 1, 0);
+function stick(g, a, b, r, m) {
+  const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b);
+  const dir = B.clone().sub(A), len = dir.length();
+  const o = new THREE.Mesh(cylGeo, m);
+  o.scale.set(r, len, r);
+  o.quaternion.setFromUnitVectors(UP, dir.normalize());
+  o.position.copy(A).add(B).multiplyScalar(0.5);
+  g.add(o);
+  return o;
+}
+
+function pot(g, r, h, color) {
+  cyl(g, r, h, 0, 0, 0, mat(color, { rough: 0.85 }), r * 1.12);
+  cyl(g, r * 1.02, 2, 0, h - 2, 0, mat('#3d2d22', { rough: 1 }));
+}
+
+function buildPlant(sp, w, d, H, col) {
+  const g = new THREE.Group();
+  const R = Math.min(w, d) / 2;
+  const potC = col || '#c9845f';
+  switch (sp) {
+    case 'monstera': {
+      pot(g, 16, 30, col || '#e9e6df');
+      for (let i = 0; i < 9; i++) {
+        const a = (i / 9) * Math.PI * 2 + rnd(i) * 0.5, rad = 18 + rnd(i + 1) * (R - 30), y = 55 + rnd(i + 2) * (H - 75);
+        const x = Math.cos(a) * rad, z = Math.sin(a) * rad;
+        stick(g, [x * 0.15, 28, z * 0.15], [x * 0.85, y - 4, z * 0.85], 0.7, mat('#5b7f3a'));
+        leaf(g, 34, 30, x, y, z, -a + Math.PI / 2, -0.7, GREENS[i % 4], 0.08);
+      }
+      break;
+    }
+    case 'fikus': {
+      pot(g, 15, 30, potC);
+      cyl(g, 1.8, H - 40, 0, 30, 0, mat('#6b5440'));
+      for (let i = 0; i < 26; i++) {
+        const y = 75 + (i / 26) * (H - 85), a = i * 2.4, r = 6 + rnd(i) * 14;
+        leaf(g, 22, 15, Math.cos(a) * r, y, Math.sin(a) * r, -a, -0.9 + rnd(i + 3) * 0.6, GREENS[i % 4], 0.15);
+      }
+      break;
+    }
+    case 'strelicja': {
+      pot(g, 18, 35, potC);
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2 + rnd(i), h = H * (0.65 + rnd(i + 2) * 0.35), r = 8 + rnd(i) * 14;
+        cyl(g, 0.7, h - 45, Math.cos(a) * r * 0.5, 35, Math.sin(a) * r * 0.5, mat('#5c7f45'));
+        leaf(g, 45, 14, Math.cos(a) * r, h - 5, Math.sin(a) * r, -a, -1.3, GREENS[i % 4], 0.1);
+      }
+      const fl = cyl(g, 1.5, 14, 6, H * 0.7, 2, mat('#ff7b1c', { rough: 0.5 }), 0.2);
+      fl.rotation.z = 1.1;
+      break;
+    }
+    case 'oliwka': {
+      pot(g, 17, 35, col || '#8c8a85');
+      cyl(g, 2.5, H * 0.5, 0, 35, 0, mat('#7a6a55'));
+      for (let i = 0; i < 9; i++) {
+        const a = i * 0.7, r = rnd(i) * 18;
+        sphere(g, 14 + rnd(i + 5) * 8, Math.cos(a) * r, H * 0.72 + rnd(i + 1) * H * 0.2, Math.sin(a) * r, mat(i % 2 ? '#8a9a6f' : '#7d8c63', { rough: 0.9 }), 0.8);
+      }
+      break;
+    }
+    case 'kentia': {
+      pot(g, 18, 35, potC);
+      for (let i = 0; i < 9; i++) {
+        const a = (i / 9) * Math.PI * 2 + rnd(i) * 0.4;
+        const fr = new THREE.Group();
+        for (let k = 0; k < 7; k++) leaf(fr, 22, 5, 0, 0, 8 + k * 10, 0.3, 0, GREENS[(i + k) % 4], 0.15).position.set(k % 2 ? 6 : -6, -k * k * 0.5, 8 + k * 10);
+        cyl(fr, 0.6, 1, 0, 0, 0, mat('#5c7f45'));
+        fr.position.set(0, H * (0.7 + rnd(i) * 0.25), 0);
+        fr.rotation.set(-0.5 - rnd(i + 2) * 0.4, a, 0, 'YXZ');
+        g.add(fr);
+        const st = cyl(g, 0.7, H * 0.7 - 30, 0, 32, 0, mat('#5c7f45'));
+        st.rotation.set(0.2 * Math.cos(a), 0, 0.2 * Math.sin(a));
+      }
+      break;
+    }
+    case 'sansewieria': {
+      pot(g, 12, 25, col || '#2e2f31');
+      for (let i = 0; i < 10; i++) {
+        const a = i * 2.1, r = 2 + rnd(i) * 6, h = H * (0.6 + rnd(i + 1) * 0.4) - 20;
+        const b = box(g, 5, h, 1.2, Math.cos(a) * r, 23, Math.sin(a) * r, mat(i % 2 ? '#3f6b3a' : '#4c7a3c', { rough: 0.6 }));
+        b.rotation.set((rnd(i + 3) - 0.5) * 0.25, a, (rnd(i + 4) - 0.5) * 0.25);
+      }
+      break;
+    }
+    case 'zamiokulkas': {
+      pot(g, 14, 25, col || '#e9e6df');
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2, tilt = 0.25 + rnd(i) * 0.25, h = H - 30 - rnd(i + 2) * 15;
+        const st = new THREE.Group();
+        cyl(st, 0.8, h, 0, 0, 0, mat('#4f6f35'));
+        for (let k = 0; k < 6; k++) { leaf(st, 9, 5, 3, h * 0.35 + k * h * 0.11, 0, 0.9, 0, '#3f7a3a', 0.2); leaf(st, 9, 5, -3, h * 0.35 + k * h * 0.11 + 3, 0, -0.9, 0, '#3f7a3a', 0.2); }
+        st.position.y = 24; st.rotation.set(tilt * Math.cos(a), 0, tilt * Math.sin(a));
+        g.add(st);
+      }
+      break;
+    }
+    case 'storczyk': {
+      pot(g, 7, 12, col || '#f4f3ef');
+      leaf(g, 18, 6, 4, 13, 0, Math.PI / 2, -0.2, '#3f6b3a', 0.15); leaf(g, 18, 6, -4, 13, 0, -Math.PI / 2, -0.2, '#3f6b3a', 0.15);
+      cyl(g, 0.4, H - 15, 0, 12, 0, mat('#5f7f40'));
+      for (let k = 0; k < 6; k++) sphere(g, 3.2, 3 + k * 1.6, H - 8 - k * 4, k % 2 ? 2 : -2, mat(k % 3 ? '#f5eef5' : '#e9b7d6', { rough: 0.5 }), 0.35);
+      break;
+    }
+    case 'bukiet': {
+      cyl(g, 7, 24, 0, 0, 0, mat('#d4e6ea', { rough: 0.05, opacity: 0.45 }), 6);
+      for (let k = 0; k < 11; k++) {
+        const a = k * 2.3, r = rnd(k) * 9;
+        cyl(g, 0.35, H - 30, Math.cos(a) * r * 0.4, 20, Math.sin(a) * r * 0.4, mat('#5f8a3f'));
+        sphere(g, 4 + rnd(k + 1) * 2, Math.cos(a) * r, H - 10 + rnd(k + 2) * 8, Math.sin(a) * r, mat(col || '#f2a7c0', { rough: 0.6 }), 0.85);
+      }
+      break;
+    }
+    case 'ziola': case 'lawenda': {
+      box(g, w, 15, d, 0, 0, 0, mat(col || (sp === 'lawenda' ? '#b5b0a6' : '#c9845f'), { rough: 0.85 }));
+      for (let x = -w / 2 + 6; x < w / 2 - 3; x += 8) {
+        if (sp === 'ziola') sphere(g, 6, x, 20, 0, mat(GREENS[Math.round(x) & 3], { rough: 0.9 }), 0.9);
+        else for (let k = 0; k < 4; k++) { cyl(g, 0.3, H - 18, x + (k - 1.5) * 1.5, 15, (k % 2) * 3 - 1.5, mat('#7d8c63')); sphere(g, 1.2, x + (k - 1.5) * 1.5, H - 4, (k % 2) * 3 - 1.5, mat('#9b7fd0'), 3); }
+      }
+      break;
+    }
+    default: pot(g, R * 0.6, 30, potC); sphere(g, R, 0, H * 0.6, 0, mat('#5f8a4a'), 1.3);
+  }
+  return g;
+}
+
 
 const matCache = new Map();
 export function mat(color, { rough = 0.8, metal = 0, opacity = 1, emissive = null } = {}) {
@@ -194,6 +371,14 @@ export function buildFurniture(it, def, style) {
       const sh = w * 0.5625 + 2;
       box(g, w, sh, 4, 0, 0, 0, mat('#151517', { rough: 0.25 }));
       box(g, w - 2, sh - 2, 0.4, 0, 1, 2.1, mat('#0b0c10', { rough: 0.12, metal: 0.3 }));
+      const L = lightOf(it, def);
+      if (L && L.on) {
+        const n = 6;
+        for (let i = 0; i < n; i++) box(g, (w - 10) / n, 1, 0.4, -hw + 5 + ((w - 10) / n) * (i + 0.5), sh - 3, -2.2, glowMat(lerpHex(L.color, L.color2, i / (n - 1)), true, 2));
+        addLight(g, { kind: 'spot', pos: [-w / 4, sh / 2, -hd - 2], dir: [-0.35, 0, -1], angle: 110, color: L.color, lm: L.lm / 2, k: 0.4 });
+        addLight(g, { kind: 'spot', pos: [w / 4, sh / 2, -hd - 2], dir: [0.35, 0, -1], angle: 110, color: L.color2, lm: L.lm / 2, k: 0.4 });
+        addLight(g, { kind: 'glow', pos: [0, sh / 2, -hd], dir: [0, 0, -1], size: [w + 90, sh + 80], shape: 'box', color: L.color, color2: L.color2, lm: L.lm });
+      }
       break;
     }
     case 'cabinet': {
@@ -363,7 +548,146 @@ export function buildFurniture(it, def, style) {
     case 'lamp': {
       const m = metal('#2c2c2e');
       cyl(g, 14, 2, 0, 0, 0, m); cyl(g, 1.2, H - 25, 0, 0, 0, m);
-      cyl(g, 20, 28, 0, H - 28, 0, mat(col || '#f3ede2', { rough: 0.9, emissive: '#fff1d6' }), 15);
+      const L = lightOf(it, def);
+      cyl(g, 20, 28, 0, H - 28, 0, L && L.on ? glowMat(L.color, true, 0.9) : mat(col || '#f3ede2', { rough: 0.9 }), 15);
+      if (L && L.on) addLight(g, { kind: 'point', pos: [0, H - 16, 0], color: L.color, lm: L.lm });
+      break;
+    }
+    case 'led_strip': case 'string_lights': {
+      const L = lightOf(it, def);
+      const on = L && L.on;
+      const n = Math.max(1, Math.min(12, Math.round(w / 40)));
+      if (def.kind === 'string_lights') {
+        box(g, w, 0.4, 0.4, 0, 0, -hd + 0.5, dark());
+        for (let i = 0; i < Math.round(w / 20); i++) {
+          const t = i / Math.max(1, Math.round(w / 20) - 1);
+          sphere(g, 1.6, -hw + 10 + i * 20, -3, -hd + 1, glowMat(lerpHex(L.color, L.color2, t), on, 2));
+        }
+      } else {
+        box(g, w, 1.5, 1.8, 0, 0, -hd + 0.9, metal('#cfd1d3'));
+        for (let i = 0; i < n; i++) {
+          const t = n === 1 ? 0.5 : i / (n - 1);
+          const m = glowMat(lerpHex(L.color, L.color2, t), on, 2.2);
+          const sx = -hw + (w / n) * (i + 0.5);
+          if (L.dir === 'up') box(g, w / n, 0.3, 1.2, sx, 1.5, -hd + 0.9, m);
+          else if (L.dir === 'down') box(g, w / n, 0.3, 1.2, sx, -0.3, -hd + 0.9, m);
+          else box(g, w / n, 1.1, 0.3, sx, 0.2, -hd + 1.95, m);
+        }
+      }
+      if (on) {
+        stripLights(g, L, w, 0.8, -hd + 1, false);
+        addLight(g, { kind: 'glow', pos: [0, 0.8, -hd], dir: [0, 0, -1], size: [w + 50, L.dir === 'out' ? 60 : 110], shape: L.dir === 'up' ? 'up' : L.dir === 'down' ? 'down' : 'box', color: L.color, color2: L.color2, lm: L.lm });
+      }
+      break;
+    }
+    case 'led_strip_v': {
+      const L = lightOf(it, def);
+      const on = L && L.on;
+      box(g, 1.8, H, 1.8, 0, 0, 0, metal('#cfd1d3'));
+      const n = 8;
+      for (let i = 0; i < n; i++) box(g, 0.3, H / n, 1.2, 0.95, (H / n) * i, 0, glowMat(lerpHex(L.color, L.color2, i / (n - 1)), on, 2.2));
+      if (on) {
+        stripLights(g, { ...L, dir: 'out' }, H, 0, 0, true);
+        addLight(g, { kind: 'glow', pos: [0, H / 2, -hd], dir: [0, 0, -1], size: [70, H + 40], shape: 'box', color: L.color, color2: L.color2, lm: L.lm, vertical: true });
+      }
+      break;
+    }
+    case 'light_tube': case 'light_bar': {
+      const L = lightOf(it, def);
+      const on = L && L.on;
+      const tube = def.kind === 'light_tube';
+      const len = tube ? w : H, n = tube ? 6 : 3;
+      for (let i = 0; i < n; i++) {
+        const t = i / (n - 1), m = glowMat(lerpHex(L.color, L.color2, t), on, 1.8);
+        if (tube) cyl(g, Math.min(hd, 2.5), w / n, -hw + (w / n) * (i + 0.5), 2.5, 0, m).rotation.z = Math.PI / 2;
+        else box(g, w, H / n, d, 0, (H / n) * i, 0, m);
+      }
+      if (tube) { box(g, 3, 5, 3, -hw + 4, 0, 0, dark()); box(g, 3, 5, 3, hw - 4, 0, 0, dark()); }
+      if (on) {
+        addLight(g, { kind: 'spot', pos: [0, tube ? 8 : H * 0.6, 18], dir: [0, 0.3, -1], angle: 110, color: lerpHex(L.color, L.color2, 0.5), lm: L.lm, k: 0.3 });
+        addLight(g, { kind: 'glow', pos: [0, tube ? 3 : H * 0.6, -hd], dir: [0, 0, -1], size: [tube ? w + 80 : 90, tube ? 90 : H + 70], shape: tube ? 'up' : 'box', color: L.color, color2: L.color2, lm: L.lm });
+      }
+      break;
+    }
+    case 'signe': {
+      const L = lightOf(it, def);
+      const on = L && L.on;
+      const floor = H > 100;
+      const m = metal(col || '#2e2f31');
+      if (floor) cyl(g, Math.min(hw, hd) * 0.9, 2, 0, 0, 0, m); else box(g, w, 2.5, d, 0, 0, 0, m);
+      box(g, 3.2, H - 2, 3.2, 0, 2, 0, m);
+      const n = 8;
+      for (let i = 0; i < n; i++) box(g, 1.6, (H - 6) / n, 0.4, 0, 3 + ((H - 6) / n) * i, -1.8, glowMat(lerpHex(L.color, L.color2, i / (n - 1)), on, 2));
+      if (on) {
+        // źródło odsunięte od ściany i szeroki stożek – miękka poświata zamiast punktu na ścianie
+        addLight(g, { kind: 'spot', pos: [0, H * 0.5, 22], dir: [0, 0.1, -1], angle: 110, color: lerpHex(L.color, L.color2, 0.5), lm: L.lm, k: 0.3 });
+        addLight(g, { kind: 'glow', pos: [0, H * 0.55, -hd], dir: [0, 0, -1], size: [floor ? 140 : 90, H + (floor ? 80 : 50)], shape: 'box', color: L.color, color2: L.color2, lm: L.lm, vertical: true });
+      }
+      break;
+    }
+    case 'iris': case 'go': case 'bloom': case 'twilight': {
+      const L = lightOf(it, def);
+      const on = L && L.on;
+      const r = Math.min(hw, hd);
+      if (def.kind === 'iris') { cyl(g, r * 0.7, 3, 0, 0, 0, dark()); sphere(g, r * 0.95, 0, H * 0.55, 0, glowMat(L.color, on, 1.4), 0.85); }
+      else if (def.kind === 'go') { cyl(g, r, H * 0.35, 0, 0, 0, lacquer('#f4f3ef')); sphere(g, r * 0.95, 0, H * 0.45, 0, glowMat(L.color, on, 1.3), 0.6); }
+      else if (def.kind === 'bloom') { const b = cyl(g, r, H, 0, 0, 0, glowMat(L.color, on, 1.2), r * 0.85); b.rotation.x = -0.5; b.position.z = 1; }
+      else { box(g, w, 3, d, 0, 0, 0, dark()); cyl(g, hd * 0.8, H - 3, 0, 3, 0, glowMat(L.color, on, 1.2), hd * 0.6); }
+      if (on) {
+        if (def.kind === 'bloom' || def.kind === 'twilight') {
+          addLight(g, { kind: 'spot', pos: [0, H, 10], dir: [0, 1, -0.6], angle: 90, color: L.color, lm: L.lm, k: 0.4 });
+          addLight(g, { kind: 'glow', pos: [0, H, -hd], dir: [0, 0, -1], size: [100, 140], shape: 'up', color: L.color, color2: L.color2 || L.color, lm: L.lm });
+        } else addLight(g, { kind: 'point', pos: [0, H * 0.6, 0], color: L.color, lm: L.lm });
+      }
+      break;
+    }
+    case 'pendant': case 'being': case 'ceiling_round': case 'ceiling_panel': case 'centris': case 'downlight': {
+      const L = lightOf(it, def);
+      const on = L && L.on;
+      const ceil = 272 - elevationOf(it, def); // odległość do sufitu – kabel / montaż
+      if (def.kind === 'pendant') {
+        cyl(g, 0.3, Math.max(0, ceil - H), 0, H, 0, dark());
+        cyl(g, hw, H * 0.85, 0, H * 0.15, 0, mat(col || '#2c2c2e', { rough: 0.5 }), hw * 0.12);
+        sphere(g, Math.min(6, hw * 0.3), 0, H * 0.25, 0, glowMat(L.color, on, 2.5));
+        if (on) addLight(g, { kind: 'spot', pos: [0, H * 0.2, 0], dir: [0, -1, 0], angle: 70, color: L.color, lm: L.lm });
+      } else if (def.kind === 'being') {
+        for (const x of [-hw + 10, hw - 10]) cyl(g, 0.2, Math.max(0, ceil - H), x, H, 0, dark());
+        box(g, w, H, d, 0, 0, 0, mat(col || '#2c2c2e', { rough: 0.4 }));
+        box(g, w - 4, 0.4, d - 3, 0, -0.4, 0, glowMat(L.color, on, 2.2));
+        if (on) for (const x of [-w / 4, w / 4]) addLight(g, { kind: 'spot', pos: [x, -2, 0], dir: [0, -1, 0], angle: 120, color: L.color, lm: L.lm / 2 });
+      } else if (def.kind === 'centris') {
+        box(g, w, 3, d, 0, H - 3, 0, lacquer('#f4f4f2'));
+        box(g, w - 6, 0.4, d - 6, 0, H - 3.4, 0, glowMat(L.color, on, 1.6));
+        for (const x of [-w / 3, 0, w / 3]) { cyl(g, 4, 9, x, H - 12, 0, lacquer('#f4f4f2')); cyl(g, 3, 0.3, x, H - 12.3, 0, glowMat(L.color, on, 2.5)); }
+        if (on) for (const x of [-w / 3, 0, w / 3]) addLight(g, { kind: 'spot', pos: [x, H - 14, 0], dir: [0, -1, 0], angle: 45, color: L.color, lm: L.lm / 3 });
+      } else {
+        // plafon / panel / oczko: świecąca dolna powierzchnia
+        const round = def.kind !== 'ceiling_panel';
+        if (round) cyl(g, hw, H, 0, 0, 0, lacquer('#f4f4f2')); else box(g, w, H, d, 0, 0, 0, lacquer('#f4f4f2'));
+        if (round) cyl(g, hw * 0.92, 0.3, 0, -0.3, 0, glowMat(L.color, on, 1.6)); else box(g, w - 2, 0.3, d - 2, 0, -0.3, 0, glowMat(L.color, on, 1.6));
+        if (on) addLight(g, { kind: 'spot', pos: [0, -2, 0], dir: [0, -1, 0], angle: def.light.angle, color: L.color, lm: L.lm });
+      }
+      break;
+    }
+    case 'plant3': g.add(buildPlant(def.plant, w, d, H, col)); break;
+    case 'slats': case 'slat_partition': {
+      const { fin, pat, slat } = slatSpec(it, def);
+      const m = fin.mdf || col ? lacquer(slat) : wood(slat);
+      const pitch = pat.slat + pat.gap;
+      const n = Math.max(1, Math.floor((w + pat.gap) / pitch));
+      const x0 = -(n * pitch - pat.gap) / 2 + pat.slat / 2;
+      const wall = def.kind === 'slats';
+      const back = wall && fin.back ? 1 : 0;
+      if (back) box(g, w, H, 1, 0, 0, -hd + 0.5, fabric(fin.back));
+      const sd = d - back;
+      const inst = new THREE.InstancedMesh(boxGeo, m, n);
+      const mx = new THREE.Matrix4(), q = new THREE.Quaternion();
+      for (let i = 0; i < n; i++) {
+        mx.compose(new THREE.Vector3(x0 + i * pitch, H / 2, -hd + back + sd / 2), q, new THREE.Vector3(pat.slat, H, sd));
+        inst.setMatrixAt(i, mx);
+      }
+      g.add(inst);
+      if (!wall) { box(g, w, 1.5, d, 0, 0, 0, m); box(g, w, 1.5, d, 0, H - 1.5, 0, m); }
       break;
     }
     case 'pet_bed': {
@@ -400,6 +724,12 @@ export function buildFurniture(it, def, style) {
     }
     default: box(g, w, H, d, 0, 0, 0, lacquer(col || '#d9d6cf'));
   }
-  g.traverse((m) => { if (m.isMesh && !(m.material.transparent)) { m.castShadow = true; m.receiveShadow = true; } });
+  const lit = !!(g.userData.lights && g.userData.lights.length);
+  g.traverse((m) => {
+    if (!m.isMesh) return;
+    const glow = m.material.userData && m.material.userData.glow;
+    m.castShadow = !m.material.transparent && !glow && !(lit && ['pendant', 'iris', 'go', 'lamp', 'ceiling_round', 'ceiling_panel', 'centris', 'downlight', 'being', 'bloom', 'twilight', 'signe', 'light_bar', 'light_tube', 'led_strip', 'led_strip_v', 'string_lights'].includes(def.kind));
+    m.receiveShadow = !glow;
+  });
   return g;
 }

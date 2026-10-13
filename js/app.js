@@ -1,9 +1,10 @@
 import { PLAN, DEFAULT_ITEMS } from './plan.js';
 import { CATALOG, CATALOG_BY_KEY, CATEGORIES } from './catalog.js';
-import { drawShape } from './shapes.js';
+import { drawShape, slatThumb } from './shapes.js';
 import { store, encodeDoc, decodeDoc, buildShareUrl, readHashCode, readHashParams } from './storage.js';
 import { normalizeStyle, WALL_PALETTE, FLOORS, FRONTS, COUNTERS, FRAMES, paletteName } from './style.js';
 import { heightOf, elevationOf } from './dims3d.js';
+import { HUE_COLORS, LIGHT_DIRS, lightOf } from './lights.js';
 import { DOOR_TYPES, DOOR_FINISHES, DOOR_NAMES, doorOptions, normalizeDoors, doorGeometry, dirOf, isClosed } from './doors.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
@@ -37,7 +38,7 @@ const svg = $('#canvas');
 const world = $('#world');
 const L = {
   floor: $('#l-floor'), structure: $('#l-structure'), overlay: $('#l-overlay'), dims: $('#l-dims'),
-  labels: $('#l-labels'), items: [$('#l-items0'), $('#l-items1'), $('#l-items2')], sel: $('#l-sel'), measure: $('#l-measure'),
+  labels: $('#l-labels'), items: [$('#l-items0'), $('#l-items1'), $('#l-items2'), $('#l-items3')], sel: $('#l-sel'), measure: $('#l-measure'),
 };
 
 const defOf = (it) => CATALOG_BY_KEY[it.t] || CATALOG_BY_KEY.custom;
@@ -166,7 +167,7 @@ function structureRects() {
 
 function clashesOf(it, rects = structureRects()) {
   const lay = layerOf(it);
-  if (lay === 0) return null;
+  if (lay === 0 || lay === 3) return null; // dywany, lamele, paski LED i elementy sufitowe nie kolidują
   const P = corners(it);
   for (const r of rects) if (polysOverlap(P, rectPts(r))) return 'ściana';
   for (const o of doc.items) {
@@ -204,7 +205,7 @@ function snapPosition(it, x, y) {
     tryY(y + hd, ry, rx, rx + rw);
   }
   for (const o of doc.items) {
-    if (o.id === it.id || layerOf(o) === 0) continue;
+    if (o.id === it.id || layerOf(o) === 0 || layerOf(o) === 3) continue;
     const b = itemBox(o);
     for (const e of [x - hw, x + hw]) { tryX(e, b.x1, b.y1, b.y2); tryX(e, b.x2, b.y1, b.y2); }
     for (const e of [y - hd, y + hd]) { tryY(e, b.y1, b.x1, b.x2); tryY(e, b.y2, b.x1, b.x2); }
@@ -218,7 +219,7 @@ function snapPosition(it, x, y) {
 function distances(it) {
   const b = itemBox(it);
   const boxes = structureRects().map(([x, y, w, h]) => ({ x1: x, y1: y, x2: x + w, y2: y + h }));
-  for (const o of doc.items) if (o.id !== it.id && layerOf(o) !== 0) boxes.push(itemBox(o));
+  for (const o of doc.items) if (o.id !== it.id && layerOf(o) !== 0 && layerOf(o) !== 3) boxes.push(itemBox(o));
   const e = 0.5;
   const res = [];
   const my = (b.y1 + b.y2) / 2, mx = (b.x1 + b.x2) / 2;
@@ -506,7 +507,7 @@ function makeItem(key, x, y) {
   const def = CATALOG_BY_KEY[key];
   const vi = def.variants ? (def.defaultVariant ?? 0) : undefined;
   const v = vi !== undefined ? def.variants[vi] : null;
-  return normalizeItem({ t: key, x, y, r: 0, w: v ? v.w : def.w, d: v ? v.d : def.d, v: vi, o: def.opts ? { ...def.opts } : undefined });
+  return normalizeItem({ t: key, x, y, r: 0, w: v ? v.w : def.w, d: v ? v.d : def.d, h: v && v.h ? v.h : undefined, v: vi, o: def.opts ? { ...def.opts } : undefined });
 }
 
 function addItemAtCenter(key) {
@@ -603,14 +604,43 @@ function renderPanel() {
     `<label class="field"><span>Środek X</span><div class="unit"><input id="prop-x" type="number" step="1" value="${r1(it.x)}"><i>cm</i></div></label>` +
     `<label class="field"><span>Środek Y</span><div class="unit"><input id="prop-y" type="number" step="1" value="${r1(it.y)}"><i>cm</i></div></label>` +
     `<label class="field"><span>Wysokość (3D)</span><div class="unit"><input id="prop-h" type="number" min="1" step="1" value="${r1(heightOf(it, def))}"><i>cm</i></div></label>` +
-    ((def.layer ?? 1) === 2
-      ? `<label class="field"><span>Montaż od podłogi</span><div class="unit"><input id="prop-e" type="number" min="0" step="1" value="${r1(elevationOf(it, def))}"><i>cm</i></div></label>`
+    ((def.layer ?? 1) >= 2 || ['led_strip', 'led_strip_v', 'string_lights'].includes(def.kind)
+      ? `<label class="field"><span>${(def.layer ?? 1) === 3 ? 'Dół lampy nad podłogą' : 'Montaż od podłogi'}</span><div class="unit"><input id="prop-e" type="number" min="0" step="1" value="${r1(elevationOf(it, def))}"><i>cm</i></div></label>`
       : '') +
     `</div>`;
   h += `<label class="field"><span>Obrót</span><div class="rot-row">` +
     `<button class="btn" data-rot="-90" title="Shift+R">⟲ 90°</button>` +
     `<div class="unit"><input id="prop-r" type="number" step="1" value="${r1(it.r)}"><i>°</i></div>` +
     `<button class="btn" data-rot="90" title="R">⟳ 90°</button></div></label>`;
+  if (def.finishes) {
+    const cur = (o.finish && def.finishes.some((x) => x.id === o.finish)) ? o.finish : def.opts.finish;
+    h += `<label class="field"><span>Wykończenie lameli</span><select data-oselect="finish">` +
+      def.finishes.map((x) => `<option value="${x.id}"${x.id === cur ? ' selected' : ''}>${esc(x.name)}</option>`).join('') + `</select></label>`;
+  }
+  if (def.patterns) {
+    const cur = (o.pattern && def.patterns.some((x) => x.id === o.pattern)) ? o.pattern : def.opts.pattern;
+    h += `<label class="field"><span>Rozstaw lameli</span><select data-oselect="pattern">` +
+      def.patterns.map((x) => `<option value="${x.id}"${x.id === cur ? ' selected' : ''}>${esc(x.name)}</option>`).join('') + `</select></label>`;
+  }
+  // światło (Hue / lampy) albo podświetlenie TV
+  const Lspec = def.light || def.lightOption;
+  if (Lspec) {
+    const L = lightOf({ ...it, o: { ...o, hue: true } }, def);
+    const active = def.light ? true : !!o.hue;
+    h += `<div class="light-box"><div class="finish-label"><b>${def.light ? 'Światło' : esc(def.lightOption.name)}</b></div>`;
+    if (!def.light) h += `<label class="check"><input type="checkbox" data-lopt="hue"${active ? ' checked' : ''}> zamontowane</label>`;
+    if (active) {
+      h += `<label class="check"><input type="checkbox" data-lopt="on"${o.on !== false ? ' checked' : ''}> włączone</label>`;
+      h += `<div class="finish-label">Kolor${Lspec.gradient ? ' – początek gradientu' : ''}</div>` + swatches(HUE_COLORS, L.color, 'data-lcolor');
+      if (Lspec.gradient) h += `<div class="finish-label">Kolor – koniec gradientu</div>` + swatches(HUE_COLORS, L.color2, 'data-lcolor2');
+      h += `<label class="field"><span>Jasność: <b id="lbright-val">${Math.round(L.bright)}%</b> · ok. ${Math.round(L.lm)} lm</span><input type="range" min="1" max="100" value="${Math.round(L.bright)}" data-lbright></label>`;
+      if (Lspec.type === 'strip' && !Lspec.vertical) {
+        h += `<label class="field"><span>Kierunek świecenia</span><select data-ldir>` +
+          ['up', 'out', 'down'].map((k) => `<option value="${k}"${L.dir === k ? ' selected' : ''}>${LIGHT_DIRS[k]}</option>`).join('') + `</select></label>`;
+      }
+    }
+    h += `</div>`;
+  }
   const checks = [];
   if (def.opts && 'chairs' in def.opts) checks.push(['chairs', 'Pokaż krzesła']);
   if (def.opts && 'mirror' in def.opts) {
@@ -645,6 +675,7 @@ function renderPanel() {
     if (e.target.value === '') return;
     const i = +e.target.value, v = def.variants[i];
     it.v = i; it.w = v.w; it.d = v.d;
+    if (v.h) it.h = v.h;
     renderItems(); renderSelection(); renderPanel(); commit();
   });
   if (def.range) {
@@ -654,6 +685,24 @@ function renderPanel() {
     for (const b of panel.querySelectorAll('[data-len]')) b.onclick = () => { it.w = +b.dataset.len; renderItems(); renderSelection(); renderPanel(); commit(); };
   }
   for (const b of panel.querySelectorAll('[data-rot]')) b.onclick = () => rotateSelected(+b.dataset.rot);
+  const setLight = (fn) => { it.o = { ...(it.o || {}) }; fn(it.o); renderItems(); renderSelection(); renderPanel(); commit(); };
+  for (const c of panel.querySelectorAll('[data-lopt]')) c.onchange = () => setLight((oo) => { oo[c.dataset.lopt] = c.checked; });
+  for (const b of panel.querySelectorAll('[data-lcolor]')) b.onclick = () => setLight((oo) => { oo.color = b.dataset.lcolor; });
+  for (const b of panel.querySelectorAll('[data-lcolor2]')) b.onclick = () => setLight((oo) => { oo.color2 = b.dataset.lcolor2; });
+  const lc = panel.querySelector('[data-lcolor-custom]'), lc2 = panel.querySelector('[data-lcolor2-custom]');
+  if (lc) lc.onchange = () => setLight((oo) => { oo.color = lc.value; });
+  if (lc2) lc2.onchange = () => setLight((oo) => { oo.color2 = lc2.value; });
+  const lb = panel.querySelector('[data-lbright]');
+  if (lb) {
+    lb.oninput = () => { $('#lbright-val').textContent = `${lb.value}%`; };
+    lb.onchange = () => setLight((oo) => { oo.bright = +lb.value; });
+  }
+  const ld = panel.querySelector('[data-ldir]');
+  if (ld) ld.onchange = () => setLight((oo) => { oo.dir = ld.value; });
+  for (const sel of panel.querySelectorAll('[data-oselect]')) sel.onchange = () => {
+    it.o = { ...(it.o || {}), [sel.dataset.oselect]: sel.value };
+    renderItems(); renderSelection(); renderPanel(); commit();
+  };
   for (const b of panel.querySelectorAll('[data-side]')) b.onclick = () => {
     it.o = { ...(it.o || {}), mirror: b.dataset.side === 'left' };
     renderItems(); renderSelection(); renderPanel(); commit();
@@ -861,7 +910,9 @@ function renderCatalog(filter = '') {
       const w = v ? v.w : c.w, d = v ? v.d : c.d;
       const sz = c.range ? `${c.range.min}–${c.range.max} × ${d}` : c.square ? `Ø ${w}` : `${w} × ${d}`;
       h += `<div class="card cat-${c.cat}" data-key="${c.key}" title="Przeciągnij na plan lub kliknij, aby dodać">` +
-        `<svg class="thumb" viewBox="${-w / 2 - 6} ${-d / 2 - 6} ${w + 12} ${d + 12}" preserveAspectRatio="xMidYMid meet"><g class="item cat-${c.cat}">${drawShape({ w, d, o: { ...(c.opts || {}), chairs: false } }, c)}</g></svg>` +
+        (c.finishes
+          ? `<svg class="thumb" viewBox="0 0 60 40" preserveAspectRatio="xMidYMid meet">${slatThumb(c)}</svg>`
+          : `<svg class="thumb" viewBox="${-w / 2 - 6} ${-d / 2 - 6} ${w + 12} ${d + 12}" preserveAspectRatio="xMidYMid meet"><g class="item cat-${c.cat}">${drawShape({ w, d, o: { ...(c.opts || {}), chairs: false } }, c)}</g></svg>`) +
         `<div class="card-text"><div class="card-name">${esc(c.name)}</div><div class="card-size">${c.hint ? esc(c.hint) : `${sz} cm${c.variants ? ` · ${c.variants.length} warianty` : ''}`}</div></div></div>`;
     }
     h += `</div></details>`;
@@ -1269,6 +1320,8 @@ async function setViewMode(m) {
         onCommit: () => { renderItems(); renderSelection(); renderPanel(); commit(); },
       });
       view3d.setOption('ao', settings.ao !== false);
+      view3d.setTimeOfDay(hashParams.t || (shotMode ? 'day' : settings.tod) || 'day');
+      for (const b of document.querySelectorAll('[data-tod]')) b.classList.toggle('on', b.dataset.tod === view3d.tod);
       view3d.setOption('cut', !shotMode && !!settings.cut);
       const cam = hashParams.cam || settings.cam || 'top';
       view3d.setCamera(cam, false);
@@ -1295,6 +1348,11 @@ function setup3dToolbar() {
   const cam = $('#cam3d');
   cam.innerHTML = PLAN.cameras.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
   cam.onchange = () => { settings.cam = cam.value; saveSettings(); if (view3d) view3d.setCamera(cam.value); };
+  for (const b of document.querySelectorAll('[data-tod]')) b.onclick = () => {
+    settings.tod = b.dataset.tod; saveSettings();
+    for (const x of document.querySelectorAll('[data-tod]')) x.classList.toggle('on', x === b);
+    if (view3d) view3d.setTimeOfDay(b.dataset.tod);
+  };
   const cut = $('#opt3d-cut'), ao = $('#opt3d-ao');
   cut.checked = !!settings.cut;
   ao.checked = settings.ao !== false;

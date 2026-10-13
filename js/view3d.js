@@ -21,6 +21,55 @@ const CEILING = '#f7f6f3';
 
 const inRect = ([x, y, w, h], px, py) => px >= x && px <= x + w && py >= y && py <= y + h;
 
+// ---------------------------------------------------------------- światło sztuczne i pora dnia
+
+// Skala źródeł: lumeny → kandele dopasowane do jasności dziennej sceny (oświetlenie dzienne ma tu wartości ~1–3)
+const LIGHT_K = 0.02;
+const SHADOW_BUDGET = 8; // liczba świateł z cieniami (limit jednostek tekstur w shaderze)
+
+export const TIMES = {
+  day: { name: 'Dzień', bg: '#dfe6ea', hemi: ['#ffffff', '#d6c9b5', 1.1], sun: 2.6, env: 0.55, exposure: 1.05, glow: 0.35 },
+  evening: { name: 'Wieczór', bg: '#27324d', hemi: ['#6d7fae', '#3a2f2a', 0.16], sun: 0, env: 0.07, exposure: 1.7, glow: 0.8 },
+  night: { name: 'Noc', bg: '#060a12', hemi: ['#33456e', '#141210', 0.055], sun: 0, env: 0.02, exposure: 2.5, glow: 1 },
+};
+
+const glowTexCache = new Map();
+// Tekstura poświaty: kolor przechodzi z color w color2 wzdłuż x; shape: box (aureola), up / down (zanik w pionie)
+function glowTexture(shape, color, color2, vertical) {
+  const key = [shape, color, color2, vertical].join('|');
+  if (glowTexCache.has(key)) return glowTexCache.get(key);
+  const S = 128, c = document.createElement('canvas');
+  c.width = c.height = S;
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(S, S);
+  const c1 = new THREE.Color(color), c2 = new THREE.Color(color2 || color);
+  const sm = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+  for (let y = 0; y < S; y++) {
+    for (let x = 0; x < S; x++) {
+      const u = x / (S - 1), v = y / (S - 1);
+      let a;
+      const ex = sm(0, 0.22, u) * sm(0, 0.22, 1 - u);
+      if (shape === 'up') a = ex * Math.pow(v, 2.2);           // jasno przy dolnej krawędzi (v=1), zanik w górę
+      else if (shape === 'down') a = ex * Math.pow(1 - v, 2.2);
+      else {
+        // miękka elipsa: pełna jasność w środku, łagodny zanik do krawędzi
+        const dd = Math.hypot((u - 0.5) / 0.5, (v - 0.5) / 0.5);
+        a = Math.pow(1 - sm(0.05, 1, dd), 1.6);
+      }
+      const t = vertical ? 1 - v : u;
+      const col = c1.clone().lerp(c2, t);
+      const i = (y * S + x) * 4;
+      img.data[i] = col.r * 255; img.data[i + 1] = col.g * 255; img.data[i + 2] = col.b * 255; img.data[i + 3] = a * 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  glowTexCache.set(key, tex);
+  return tex;
+}
+
+
 // ---------------------------------------------------------------- konstrukcja
 
 function collectSolids(doc, cut) {
@@ -234,6 +283,7 @@ export class View3D {
 
     const hemi = new THREE.HemisphereLight('#ffffff', '#d6c9b5', 1.1);
     scene.add(hemi);
+    this.hemi = hemi;
     const sun = new THREE.DirectionalLight('#fff4e2', 2.6);
     sun.position.set(4 + 6, 9, 4.5 + 7.5);
     sun.target.position.set(4, 0, 4.5);
@@ -243,6 +293,12 @@ export class View3D {
     sun.shadow.bias = -0.0004;
     sun.shadow.normalBias = 0.02;
     scene.add(sun, sun.target);
+    this.sun = sun;
+    r.shadowMap.autoUpdate = false; // scena statyczna – mapy cieni odświeżane tylko po zmianach
+    this.shadowDirty = true;
+    this.tod = 'day';
+    this.lights = [];
+    this.glowMats = new Set();
 
     this.camera = new THREE.PerspectiveCamera(60, 1, 0.05, 200);
     this.controls = new OrbitControls(this.camera, r.domElement);
@@ -298,7 +354,10 @@ export class View3D {
     this.clear(this.structure);
     const aniso = this.renderer.capabilities.getMaxAnisotropy();
     const cut = this.opts.cut ? 110 : 0;
+    this.solids = collectSolids(doc, cut);
     for (const m of wallFaces(doc, style, cut)) this.structure.add(m);
+    this.shadowDirty = true;
+    this.furnKey = null; // poświaty zależą od położenia ścian
 
     // posadzki: podkład pod całym lokalem (progi, miejsca po ściankach) + pomieszczenia
     this.structure.add(floorMesh(PLAN.floor, style.floors['5'], -0.4, aniso));
@@ -481,8 +540,89 @@ export class View3D {
 
   setSelectedDoor(id) { this.selectedDoor = id; this.updateSelection(); this.dirty = true; }
 
+
+  // Zamienia opisy świateł elementu (userData.lights, cm w układzie lokalnym) na światła sceny i poświaty na ścianach
+  attachLights(it, inner) {
+    for (const o of [...inner.children]) if (o.userData.hueLight) { inner.remove(o); if (o.isMesh) o.geometry.dispose(); }
+    const list = inner.userData.lights || [];
+    const made = [];
+    const rad = (-it.r * Math.PI) / 180;
+    for (const L of list) {
+      const color = new THREE.Color(L.color);
+      if (L.kind === 'point') {
+        const l = new THREE.PointLight(color, (L.lm / (4 * Math.PI)) * LIGHT_K, 4.5, 2);
+        l.position.set(...L.pos);
+        l.userData.lm = L.lm;
+        made.push(l);
+      } else if (L.kind === 'spot') {
+        const half = Math.min(L.angle / 2, 85) * (Math.PI / 180);
+        const l = new THREE.SpotLight(color, (L.lm / (2 * Math.PI * (1 - Math.cos(half)))) * LIGHT_K * (L.k ?? 1), 6, half, 0.6, 2);
+        l.position.set(...L.pos);
+        l.target.position.set(L.pos[0] + L.dir[0] * 100, L.pos[1] + L.dir[1] * 100, L.pos[2] + L.dir[2] * 100);
+        l.target.userData.hueLight = true;
+        l.userData.lm = L.lm;
+        inner.add(l.target);
+        made.push(l);
+      } else if (L.kind === 'glow') {
+        // poświata na najbliższej ścianie za elementem (szukanie w rzucie wzdłuż -z lokalnego)
+        const [lx, ly, lz] = L.pos;
+        const px = it.x + lx * Math.cos(rad) + lz * Math.sin(rad), py = it.y - lx * Math.sin(rad) + lz * Math.cos(rad);
+        const dx = -Math.sin(rad), dy = -Math.cos(rad); // kierunek -z lokalnego w rzucie
+        const h = elevationOf(it, CATALOG_BY_KEY[it.t]) + ly;
+        const hit = (t) => (this.solids || []).some((s) => h >= s.y0 && h <= s.y1 && inRect(s.rect, px + dx * t, py + dy * t));
+        let dist = null;
+        for (let t = 0; t <= 120 && dist === null; t += 1) if (hit(t)) dist = t;
+        if (dist === null) continue;
+        while (dist > 0 && hit(dist - 0.1)) dist -= 0.1; // dokładne lico ściany (krok 1 mm)
+        const [sw, sh] = L.size;
+        const m = new THREE.MeshBasicMaterial({ map: glowTexture(L.shape, L.color, L.color2, L.vertical), transparent: true, depthWrite: false,
+          blending: THREE.AdditiveBlending, opacity: TIMES[this.tod].glow * Math.min(0.75, 0.25 + L.lm / 4000), toneMapped: false });
+        m.userData.glowBase = Math.min(0.75, 0.25 + L.lm / 4000);
+        const plane = new THREE.Mesh(new THREE.PlaneGeometry(sw, sh), m);
+        const cy = L.shape === 'up' ? ly + sh / 2 - 8 : L.shape === 'down' ? ly - sh / 2 + 8 : ly;
+        plane.position.set(lx, cy, lz - dist + 0.6); // 6 mm przed licem ściany
+        plane.userData.hueLight = true;
+        plane.renderOrder = 2;
+        inner.add(plane);
+        this.glowMats.add(m);
+      }
+    }
+    for (const l of made) { l.userData.hueLight = true; inner.add(l); this.lights.push(l); }
+  }
+
+  // Cienie tylko dla najjaśniejszych świateł (budżet tekstur), reszta bez cieni z ograniczonym zasięgiem
+  assignShadows() {
+    const sorted = [...this.lights].sort((a, b) => b.userData.lm - a.userData.lm);
+    sorted.forEach((l, i) => {
+      const cast = i < SHADOW_BUDGET;
+      l.castShadow = cast;
+      if (cast) {
+        l.shadow.mapSize.set(1024, 1024);
+        l.shadow.bias = -0.004;
+        l.shadow.normalBias = 0.06;
+        l.shadow.radius = 3;
+        l.shadow.camera.near = 0.05;
+      }
+    });
+  }
+
+  setTimeOfDay(mode) {
+    const T = TIMES[mode] || TIMES.day;
+    this.tod = TIMES[mode] ? mode : 'day';
+    this.scene.background = new THREE.Color(T.bg);
+    this.hemi.color.set(T.hemi[0]); this.hemi.groundColor.set(T.hemi[1]); this.hemi.intensity = T.hemi[2];
+    this.sun.intensity = T.sun; this.sun.visible = T.sun > 0;
+    this.scene.environmentIntensity = T.env;
+    this.renderer.toneMappingExposure = T.exposure;
+    for (const m of this.glowMats) m.opacity = T.glow * (m.userData.glowBase || 1);
+    this.shadowDirty = true;
+    this.dirty = true;
+  }
+
   buildFurniture(doc, style) {
     this.clear(this.furniture);
+    this.lights = [];
+    this.glowMats = new Set();
     const st = { kitchenFront: style.kitchenFront, counterHex: COUNTERS[style.counter].hex, counterWood: !!COUNTERS[style.counter].wood };
     this.nodes = new Map();
     for (const it of doc.items) {
@@ -495,7 +635,10 @@ export class View3D {
       this.placeNode(g, it, def);
       this.furniture.add(g);
       this.nodes.set(it.id, g);
+      this.attachLights(it, inner);
     }
+    this.assignShadows();
+    this.shadowDirty = true;
   }
 
   placeNode(g, it, def) {
@@ -507,7 +650,14 @@ export class View3D {
     const g = this.nodes && this.nodes.get(it.id);
     if (!g) return;
     this.placeNode(g, it);
+    const inner = g.children[0];
+    if (inner && inner.userData.lights && inner.userData.lights.some((L) => L.kind === 'glow')) {
+      this.lights = this.lights.filter((l) => l.parent !== inner);
+      this.attachLights(it, inner);
+      this.assignShadows();
+    }
     this.updateSelection();
+    this.shadowDirty = true;
     this.dirty = true;
   }
 
@@ -552,7 +702,8 @@ export class View3D {
 
   setOption(key, value) {
     this.opts[key] = value;
-    if (key === 'cut') { this.structKey = null; if (this.doc) this.setData(this.doc, this.style); }
+    if (key === 'cut') { this.structKey = null; this.furnKey = null; if (this.doc) this.setData(this.doc, this.style); }
+    this.shadowDirty = true;
     this.dirty = true;
   }
 
@@ -569,6 +720,7 @@ export class View3D {
 
   render() {
     if (this.ao) this.ao.enabled = this.opts.ao;
+    if (this.shadowDirty) { this.renderer.shadowMap.needsUpdate = true; this.shadowDirty = false; }
     this.composer.render();
   }
 

@@ -23,6 +23,11 @@ Rzut jest odwzorowany wektorowo w skali 1:1 w centymetrach na podstawie rzutu 1:
   i drzwi, meble jako bryły, gotowe ujęcia kamery, przekrój, eksport PNG. Meble można zaznaczać i przesuwać także w 3D.
 - **Drzwi do konfiguracji** (kliknij drzwi na rzucie): zawiasy na drugą stronę, otwieranie do drugiego pomieszczenia,
   typ – skrzydłowe, ukryte (zlicowane ze ścianą, w kolorze ściany), przesuwne naścienne, sam otwór – i kolor skrzydła.
+- **Oświetlenie Philips Hue** (oferta 2026): paski LED (Flux, OmniGlow z gradientem, Lightstrip Plus, pionowe) w dowolnym
+  miejscu na ścianie z wysokością montażu i kierunkiem świecenia, lampy Signe / Play / Iris / Go / Bloom / Twilight,
+  wiszące i sufitowe, girlanda Festavia, podświetlenie TV Hue Play Gradient; kolor, gradient, jasność, włącz/wyłącz.
+- **Dzień / Wieczór / Noc** w 3D: prawdziwe źródła światła z cieniami, poświata na ścianach, świecące klosze i paski.
+- **Rośliny i kwiaty**: monstera, fikus, strelicja, oliwka, kentia, sansewieria, zamiokulkas, storczyk, bukiet, zioła, lawenda.
 - **Zwierzęta**: legowiska dobrane do wagi psa (labrador 35 kg → XL 110 × 85 cm), stojak z miskami.
 - **Wykończenie** (panel po prawej, gdy nic nie jest zaznaczone): kolor ścian i posadzka dla każdego pomieszczenia,
   ściana akcentowa, fronty kuchenne, blat, ramy okien, posadzka balkonu – zapisywane w projekcie i w linku.

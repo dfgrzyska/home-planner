@@ -189,6 +189,26 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 .cat-balkon { --fill: #e1ecd5; }
 .cat-inne { --fill: #e9e9e6; }
 .cat-zwierzeta { --fill: #e7dccb; }
+.cat-lamele { --fill: #c9a57e; }
+.item .slat { stroke: none; }
+.cat-hue { --fill: #f4f1ea; }
+.cat-rosliny { --fill: #dfe9d3; }
+.thumb .glow { display: none; }
+.light-box { border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px 10px; margin: 12px 0; background: #fcfbf8; }
+.toolbar3d .seg.tod { display: inline-flex; gap: 0; margin: 0; }
+.toolbar3d .seg.tod button { border-radius: 0; padding: 4px 9px; }
+.toolbar3d .seg.tod button:first-child { border-radius: 6px 0 0 6px; }
+.toolbar3d .seg.tod button:last-child { border-radius: 0 6px 6px 0; }
+.item .glow { opacity: .22; stroke: none; pointer-events: none; filter: blur(6px); }
+.item .strip { fill: #e9e7e2; }
+.item .strip-led { stroke-width: 2.5; vector-effect: non-scaling-stroke; stroke-linecap: round; }
+.item .lamp-led { fill: #fff3d6; stroke: #c9a23a; stroke-width: .6; vector-effect: non-scaling-stroke; }
+.item .ceiling { fill-opacity: .55; stroke-dasharray: 4 3; }
+.item .pot { fill: #c9845f; }
+.item .leaf2d { fill: #5b8f45; stroke: #2f5427; stroke-width: .5; vector-effect: non-scaling-stroke; }
+.item .flower2d { fill: #f2a7c0; stroke: #a8566f; stroke-width: .5; vector-effect: non-scaling-stroke; }
+.item .lavender2d { fill: #9b7fd0; stroke: none; }
+.item .slat-outline { fill: none; stroke-dasharray: 2 2; }
 .item .body { fill: var(--fill); stroke: #3a3d44; stroke-width: 1.2; vector-effect: non-scaling-stroke; }
 .item .body2 { fill: color-mix(in srgb, var(--fill) 70%, #ffffff); stroke: #3a3d44; stroke-width: .8; vector-effect: non-scaling-stroke; }
 .item .ln { fill: none; stroke: #3a3d44; stroke-width: .8; vector-effect: non-scaling-stroke; }

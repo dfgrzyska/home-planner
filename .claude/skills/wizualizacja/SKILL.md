@@ -40,6 +40,9 @@ Zmieniaj **tylko** `style`, `doors` (wykończenie/typ) oraz kolory mebli (`items
 Drzwi (`doors`, obok `style` w dokumencie): `{"d1".."d4": {"type": "swing"|"hidden"|"sliding"|"none", "finish": "white"|"oak"|"walnut"|"graphite"|"black"|"entrance", "flipHinge": bool, "flipSwing": bool, "closed": bool}}` – d1 wejściowe, d2 łazienka, d3 pokój 2, d4 pokój 3 (`js/doors.js`). Zmieniaj tylko `finish`/`type`, gdy opis o to prosi („drzwi dębowe”, „drzwi ukryte w kolorze ściany”); kierunku otwierania nie ruszaj. Do zdjęć warto ustawić `closed: true` dla drzwi widocznych w kadrze.
 
 Nazwy kolorów z palety aplikacji (`WALL_PALETTE`, `FRONTS` w `js/style.js`) – użyj ich, gdy pasują do opisu, inaczej dobierz hex sam.
+Lamele (`t`: `lamele_wall`, `lamele_tv`, `lamele_half`, `lamele_partition`): wykończenie w `o.finish` (`dab_czarny`, `orzech_czarny`, `dab_szary`, `czarne`, `biale`, `zielone`, `dab_bez`), rozstaw w `o.pattern` – listy w `js/catalog.js`.
+Światła (kategoria `hue` w `js/catalog.js`: paski `hue_flux`, `hue_omniglow`, `hue_strip_plus`, `hue_strip_vertical`, lampy `hue_signe_floor`, `hue_play_floor`, `hue_signe_table`, `hue_play_table`, `hue_iris`, `hue_go`, `hue_bloom`, `hue_twilight`, sufitowe/wiszące `hue_pendant`, `hue_being`, `hue_infuse`, `hue_surimu`, `hue_centris`, `hue_gu10`, girlanda `hue_festavia`; zwykła `lamp`): stan w `o` – `on` (bool), `color`, `color2` (gradient), `bright` (1–100), `dir` dla pasków (`up`/`out`/`down`); wysokość montażu `e` (cm). Podświetlenie TV: na elemencie `tv` ustaw `o.hue: true` (+ `color`, `color2`). Opis typu „wieczorem ciepłe światło 2700 K, pasek za TV na fioletowo” zamieniaj na te pola; kolory: `HUE_COLORS` w `js/lights.js`.
+Rośliny (`pl_*`, kategoria `rosliny`): kolor elementu `c` = kolor donicy, dla `pl_bukiet` = kolor kwiatów.
 Kolor mebla: `c` w elemencie (sofa – tkanina, stół/szafki – materiał frontu/blatu, dywan – kolor dywanu). Typy elementów: `t` (klucze z `js/catalog.js`).
 
 Zapisz zmieniony JSON i zbuduj nowy link, który otworzy projekt od razu w 3D:
@@ -55,6 +58,8 @@ Daj użytkownikowi ten link – może obejrzeć wnętrze w przeglądarce i dalej
 ```bash
 python tools/render3d.py --doc renders/<folder>/projekt.json --cams salon_balcony,kitchen,room2,room3 --out renders/<folder>
 ```
+
+Pora dnia: `--time day|evening|night` (pliki `<ujęcie>_night_3d.png` itd.). Wieczorem i w nocy świecą tylko lampy i paski z projektu (światła Hue), więc gdy użytkownik chce wizualizacji nocnej, upewnij się, że w kadrze jest jakieś światło włączone.
 
 Ujęcia: `top` (makieta z góry), `salon_balcony`, `salon_entry`, `kitchen`, `room2`, `room3`, `bath`, `hall`.
 Domyślnie 2–4 ujęcia z pomieszczeń, o które pytał użytkownik (`top` nie nadaje się do fotorealizmu).
@@ -82,6 +87,8 @@ Materials: walls painted in <kolor ścian widocznego pomieszczenia> matte paint;
 <styl / dodatki z opisu użytkownika, np. "add a few green plants and linen curtains" – tylko jeśli prosił>
 Soft natural daylight from the windows, realistic soft shadows and reflections, fine material textures, professional architectural interior photography, 24mm lens, high detail.
 ```
+
+Dla renderów wieczornych/nocnych zamiast zdania o świetle dziennym napisz np.: `Night scene: it is dark outside the windows; the room is lit only by the existing lamps and LED strips — keep their exact positions, colors and the colored glow they cast on the walls (<kolory>, e.g. warm white 2700K pendant over the table, purple Philips Hue backlight behind the TV). Cozy, moody evening atmosphere, realistic light falloff and soft shadows.`
 
 Opisuj tylko to, co widać w danym ujęciu (kolor ścian właściwego pomieszczenia!). Dekoracji nie dodawaj, chyba że użytkownik prosi.
 

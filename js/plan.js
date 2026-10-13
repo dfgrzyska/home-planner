@@ -55,11 +55,11 @@ export const PLAN = {
     { id: 'p2k', name: 'Pokój 2 ↔ aneks', rects: [[293, 529, 10, 337]] },
   ],
 
-  // Okna / drzwi balkonowe: prostokąt otworu w ścianie + podziały; sill/head = wysokość parapetu i nadproża (3D)
+  // Okna (wszystkie do podłogi) i drzwi balkonowe: prostokąt otworu w ścianie + podziały; sill/head = parapet i nadproże (3D)
   windows: [
-    { rect: [771, 158, 46, 109], sill: 85, head: 240 },
-    { rect: [771, 479, 46, 109], sill: 85, head: 240 },
-    { rect: [68, 866, 111, 45], sill: 85, head: 240 },
+    { rect: [771, 158, 46, 109], sill: 0, head: 240 },
+    { rect: [771, 479, 46, 109], sill: 0, head: 240 },
+    { rect: [68, 866, 111, 45], sill: 0, head: 240 },
     { rect: [448, 866, 288, 45], mullions: [627], sill: 0, head: 240, label: 'wyjście na balkon' },
   ],
 

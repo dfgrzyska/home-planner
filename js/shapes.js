@@ -44,12 +44,82 @@ function roundChairs(dia) {
   return s;
 }
 
+import { lightOf } from './lights.js';
+
+// Rośliny w rzucie: liście promieniście wokół donicy, kształt zależny od gatunku
+const PLANT2D = {
+  monstera: { n: 9, len: 0.5, wid: 0.3, col: '#4f8a3f' },
+  fikus: { n: 14, len: 0.32, wid: 0.18, col: '#4c7d3a' },
+  strelicja: { n: 10, len: 0.48, wid: 0.12, col: '#4f7f4a' },
+  oliwka: { n: 22, len: 0.22, wid: 0.06, col: '#8a9a6f' },
+  kentia: { n: 9, len: 0.5, wid: 0.07, col: '#5b8f45' },
+  sansewieria: { n: 9, len: 0.4, wid: 0.08, col: '#3f6b3a' },
+  zamiokulkas: { n: 8, len: 0.42, wid: 0.12, col: '#3f7a3a' },
+};
+function drawPlant(sp, w, d, potColor) {
+  const hw = w / 2, hd = d / 2;
+  let s = '';
+  if (sp === 'storczyk') return ellipse(0, 0, hw * 0.45, hd * 0.55, 'body pot') + ellipse(-hw * 0.3, 0, hw * 0.5, hd * 0.25, 'leaf2d') + circle(hw * 0.35, -hd * 0.2, 3, 'flower2d') + circle(hw * 0.55, 0, 3, 'flower2d') + circle(hw * 0.4, hd * 0.25, 3, 'flower2d');
+  if (sp === 'bukiet') {
+    s += circle(0, 0, hw * 0.35, 'body pot');
+    for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; s += `<circle class="flower2d" cx="${f(Math.cos(a) * hw * 0.55)}" cy="${f(Math.sin(a) * hd * 0.55)}" r="${f(hw * 0.22)}"${potColor ? ` style="fill:${potColor}"` : ''}/>`; }
+    return s + circle(0, 0, hw * 0.2, 'flower2d');
+  }
+  if (sp === 'ziola' || sp === 'lawenda') {
+    s += rect(-hw, -hd, w, d, 'body pot', 2);
+    const cls = sp === 'lawenda' ? 'lavender2d' : 'leaf2d';
+    for (let x = -hw + 6; x < hw - 3; x += 8) s += circle(x, 0, Math.min(hd * 0.7, 5), cls);
+    return s;
+  }
+  const P = PLANT2D[sp] || PLANT2D.monstera;
+  for (let i = 0; i < P.n; i++) {
+    const a = (i / P.n) * 360 + (i % 2) * 17;
+    const L = Math.min(hw, hd) * (P.len + ((i * 37) % 10) / 60), W = Math.min(hw, hd) * P.wid * 1.6;
+    s += `<ellipse class="leaf2d" cx="${f(L * 0.55)}" cy="0" rx="${f(L * 0.55)}" ry="${f(W)}" transform="rotate(${f(a)})" style="fill:${P.col}"/>`;
+  }
+  s += circle(0, 0, Math.min(hw, hd) * 0.32, 'body pot');
+  return s;
+}
+
+// Poświata światła na rzucie (pod elementem)
+function glow2d(item, def) {
+  const L = lightOf(item, def);
+  if (!L || !L.on) return '';
+  const hw = item.w / 2, hd = item.d / 2;
+  const r = 35 + Math.sqrt(L.lm) * 1.6;
+  if (L.type === 'strip') return `<ellipse class="glow" cx="0" cy="${f(hd + 12)}" rx="${f(hw + 25)}" ry="${f(28 + Math.sqrt(L.lm / Math.max(1, item.w)) * 6)}" style="fill:${L.color}"/>`;
+  if (L.type === 'tv') return `<ellipse class="glow" cx="0" cy="${f(-hd - 6)}" rx="${f(hw + 30)}" ry="30" style="fill:${L.color}"/>`;
+  if (L.type === 'wall') return `<ellipse class="glow" cx="0" cy="${f(-hd - 10)}" rx="${f(r * 0.8)}" ry="${f(r * 0.45)}" style="fill:${L.color}"/>`;
+  return `<circle class="glow" cx="0" cy="0" r="${f(r)}" style="fill:${L.color}"/>`;
+}
+
+// Wykończenie i rozstaw lameli elementu (z domyślnymi z katalogu)
+export function slatSpec(item, def) {
+  const o = item.o || {};
+  const fin = def.finishes.find((f) => f.id === o.finish) || def.finishes.find((f) => f.id === def.opts.finish);
+  const pat = def.patterns.find((p) => p.id === o.pattern) || def.patterns.find((p) => p.id === def.opts.pattern);
+  return { fin, pat, slat: item.c || fin.slat };
+}
+
+// Miniatura lameli w katalogu – widok z przodu (z góry to tylko cienka kreska)
+export function slatThumb(def) {
+  const { fin, pat, slat } = slatSpec({ o: def.opts }, def);
+  const half = def.key === 'lamele_half';
+  const W = 60, H = 40, top = half ? 22 : 2;
+  let s = `<rect x="0" y="0" width="${W}" height="${H}" fill="#f2efe8" stroke="#c9c7c0" stroke-width=".6"/>`;
+  if (fin.back && def.kind === 'slats') s += `<rect x="4" y="${top}" width="${W - 8}" height="${H - top - 2}" fill="${fin.back}"/>`;
+  const k = 1.4, pitch = (pat.slat + pat.gap) * k;
+  for (let x = 4; x + pat.slat * k <= W - 4 + 0.01; x += pitch) s += `<rect x="${f(x)}" y="${top}" width="${f(pat.slat * k)}" height="${H - top - 2}" fill="${slat}"/>`;
+  return s;
+}
+
 export function drawShape(item, def) {
   const { w, d } = item;
   const hw = w / 2, hd = d / 2;
   const kind = def.kind;
   const opts = item.o || {};
   let s = '';
+  const glow = glow2d(item, def);
   switch (kind) {
     case 'bed': {
       s += rect(-hw, -hd, w, d, 'body', 3);
@@ -269,6 +339,49 @@ export function drawShape(item, def) {
       } else s += line(-hw + 8, 0, hw - 8, 0, 'ln leaf');
       break;
     }
+    case 'led_strip': case 'string_lights': {
+      const L = lightOf(item, def) || {};
+      s += rect(-hw, -hd, w, d, 'body strip', 1);
+      s += `<line class="strip-led" x1="${f(-hw + 1)}" y1="0" x2="${f(hw - 1)}" y2="0" style="stroke:${L.color || '#ffb066'}"/>`;
+      if (def.kind === 'string_lights') for (let x = -hw + 10; x < hw; x += 20) s += circle(x, 0, 1.6, 'body2');
+      break;
+    }
+    case 'led_strip_v': {
+      const L = lightOf(item, def) || {};
+      s += circle(0, 0, Math.max(hw, 1.5), 'body strip') + circle(0, 0, 1, 'strip-dot') ;
+      s = s.replace('class="strip-dot"', `class="strip-dot" style="fill:${L.color || '#ffb066'}"`);
+      break;
+    }
+    case 'light_tube': case 'light_bar': s += rect(-hw, -hd, w, d, 'body lamp-body', Math.min(hw, hd)); break;
+    case 'signe': s += rect(-hw, -hd, w, d, 'body lamp-body', 3) + rect(-2, -hd + 2, 4, d - 4, 'lamp-led'); break;
+    case 'iris': case 'go': case 'bloom': s += ellipse(0, 0, hw, hd, 'body lamp-body') + ellipse(0, 0, hw * 0.55, hd * 0.55, 'lamp-led'); break;
+    case 'twilight': s += rect(-hw, -hd, w, d, 'body lamp-body', 6) + ellipse(0, -hd * 0.2, hw * 0.6, hd * 0.5, 'lamp-led'); break;
+    case 'pendant': case 'ceiling_round': case 'downlight': {
+      s += ellipse(0, 0, hw, hd, 'body ceiling');
+      s += line(-hw * 0.7, 0, hw * 0.7, 0, 'ln thin') + line(0, -hd * 0.7, 0, hd * 0.7, 'ln thin');
+      break;
+    }
+    case 'being': case 'ceiling_panel': s += rect(-hw, -hd, w, d, 'body ceiling', 2) + line(-hw + 4, 0, hw - 4, 0, 'ln thin'); break;
+    case 'centris': {
+      s += rect(-hw, -hd, w, d, 'body ceiling', 6);
+      for (const x of [-w / 3, 0, w / 3]) s += circle(x, 0, Math.min(5, hd - 2), 'lamp-led');
+      break;
+    }
+    case 'plant3': s += drawPlant(def.plant, w, d, item.c); break;
+    case 'slats': case 'slat_partition': {
+      const { fin, pat, slat } = slatSpec(item, def);
+      const pitch = pat.slat + pat.gap;
+      const n = Math.max(1, Math.floor((w + pat.gap) / pitch));
+      const x0 = -(n * pitch - pat.gap) / 2;
+      if (def.kind === 'slats') {
+        s += `<rect class="body slat-panel" x="${f(-hw)}" y="${f(-hd)}" width="${f(w)}" height="${f(d)}" style="fill:${fin.back || slat}"/>`;
+        for (let i = 0; i < n; i++) s += `<rect class="slat" x="${f(x0 + i * pitch)}" y="${f(-hd + (fin.back ? 1 : 0))}" width="${f(pat.slat)}" height="${f(d - (fin.back ? 1 : 0))}" style="fill:${slat}"/>`;
+      } else {
+        s += `<rect class="body slat-outline" x="${f(-hw)}" y="${f(-hd)}" width="${f(w)}" height="${f(d)}"/>`;
+        for (let i = 0; i < n; i++) s += `<rect class="slat" x="${f(x0 + i * pitch)}" y="${f(-hd)}" width="${f(pat.slat)}" height="${f(d)}" style="fill:${slat}"/>`;
+      }
+      break;
+    }
     case 'pet_bed': {
       // legowisko z obrzeżem z trzech stron i niższym wejściem z przodu
       const b = Math.min(14, Math.min(w, d) * 0.16);
@@ -303,5 +416,5 @@ export function drawShape(item, def) {
       s += line(-hw, hd - 3, hw, hd - 3, 'ln thin');
     }
   }
-  return s;
+  return glow + s;
 }
