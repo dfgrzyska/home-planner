@@ -163,6 +163,8 @@ def main():
     ap.add_argument("--ref", help="obraz referencyjny stylu (tylko workflow obsługujące wiele obrazów)")
     ap.add_argument("--seed", type=int)
     ap.add_argument("--count", type=int, default=1, help="liczba wariantów (różne seedy)")
+    ap.add_argument("--cfg", type=float, help="nadpisz CFG (przy Qwen 2.1 > 1 włącza negatywny prompt, ~2x dłużej)")
+    ap.add_argument("--steps", type=int, help="nadpisz liczbę kroków")
     ap.add_argument("--url", default=cfg["comfy_url"])
     ap.add_argument("--check", action="store_true")
     a = ap.parse_args()
@@ -190,6 +192,10 @@ def main():
     for i in range(a.count):
         seed = a.seed + i if a.seed is not None else random.randint(1, 2**48)
         graph = build_graph(a.workflow, {"IMAGE": image, "PROMPT": prompt, "NEGATIVE": a.negative, "SEED": seed, "REF": ref})
+        for node in graph.values():
+            if node["class_type"] == "KSampler":
+                if a.cfg is not None: node["inputs"]["cfg"] = a.cfg
+                if a.steps is not None: node["inputs"]["steps"] = a.steps
         target = out if i == 0 else out.with_name(f"{out.stem}_v{i + 1}{out.suffix}")
         t0 = time.time()
         files = run(base, graph, target)

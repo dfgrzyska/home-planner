@@ -102,9 +102,9 @@ export const PLAN = {
     { id: 'salon_balcony', name: 'Salon i aneks – od balkonu', pos: [760, 850, 165], target: [330, 330, 100], fov: 72 },
     { id: 'salon_entry', name: 'Salon – od przedpokoju', pos: [330, 420, 160], target: [760, 760, 100], fov: 72 },
     { id: 'kitchen', name: 'Aneks kuchenny', pos: [650, 810, 160], target: [320, 620, 100], fov: 68 },
-    { id: 'room2', name: 'Pokój 2', pos: [275, 505, 160], target: [40, 830, 100], fov: 72 },
+    { id: 'room2', name: 'Pokój 2', pos: [112, 505, 160], target: [170, 860, 90], fov: 76 },
     { id: 'room3', name: 'Pokój 3', pos: [480, 280, 160], target: [770, 60, 100], fov: 72 },
-    { id: 'bath', name: 'Łazienka', pos: [190, 330, 160], target: [330, 40, 85], fov: 78 },
+    { id: 'bath', name: 'Łazienka', pos: [228, 336, 165], target: [310, 20, 80], fov: 78 },
     { id: 'hall', name: 'Przedpokój', pos: [150, 470, 160], target: [20, 40, 110], fov: 72 },
   ],
 

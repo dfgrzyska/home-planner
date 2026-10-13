@@ -89,8 +89,58 @@ function glow2d(item, def) {
   const r = 35 + Math.sqrt(L.lm) * 1.6;
   if (L.type === 'strip') return `<ellipse class="glow" cx="0" cy="${f(hd + 12)}" rx="${f(hw + 25)}" ry="${f(28 + Math.sqrt(L.lm / Math.max(1, item.w)) * 6)}" style="fill:${L.color}"/>`;
   if (L.type === 'tv') return `<ellipse class="glow" cx="0" cy="${f(-hd - 6)}" rx="${f(hw + 30)}" ry="30" style="fill:${L.color}"/>`;
-  if (L.type === 'wall') return `<ellipse class="glow" cx="0" cy="${f(-hd - 10)}" rx="${f(r * 0.8)}" ry="${f(r * 0.45)}" style="fill:${L.color}"/>`;
+  if (L.type === 'wall' || L.type === 'mirror') return `<ellipse class="glow" cx="0" cy="${f(-hd - 10)}" rx="${f(r * 0.8)}" ry="${f(r * 0.45)}" style="fill:${L.color}"/>`;
   return `<circle class="glow" cx="0" cy="0" r="${f(r)}" style="fill:${L.color}"/>`;
+}
+
+
+// Obrys lustra w układzie lokalnym: x ∈ [-w/2, w/2], y ∈ [0, h] (y = wysokość od dołu lustra)
+export function mirrorOutline(shape, w, h, n = 96) {
+  const pts = [];
+  if (shape === 'rect') {
+    const r = Math.min(4, w / 4, h / 4), q = 6;
+    const corners = [[w / 2 - r, h - r, 0], [-w / 2 + r, h - r, 90], [-w / 2 + r, r, 180], [w / 2 - r, r, 270]];
+    for (const [cx, cy, a0] of corners) for (let i = 0; i <= q; i++) {
+      const a = ((a0 + (90 * i) / q) * Math.PI) / 180;
+      pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]);
+    }
+    return pts;
+  }
+  if (shape === 'arch') {
+    const R = w / 2, straight = Math.max(0, h - R);
+    pts.push([w / 2, 0]);
+    for (let i = 0; i <= 32; i++) { const a = (Math.PI * i) / 32; pts.push([Math.cos(a) * R, straight + Math.sin(a) * R]); }
+    pts.push([-w / 2, 0]);
+    return pts;
+  }
+  const rad = {
+    round: () => 1,
+    pebble: (t) => 1 + 0.08 * Math.sin(2 * t + 0.6) + 0.05 * Math.sin(3 * t + 1.9) + 0.03 * Math.cos(5 * t),
+    wave: (t) => 1 + 0.035 * Math.sin(10 * t),
+    cloud: (t) => 0.84 + 0.16 * Math.abs(Math.sin(2.5 * t)),
+  }[shape] || (() => 1);
+  for (let i = 0; i < n; i++) {
+    const t = (i / n) * Math.PI * 2;
+    // wave: lekko „kwadratowy” owal (superelipsa), pozostałe: elipsa
+    const c = Math.cos(t), s = Math.sin(t);
+    const k = shape === 'wave' ? 0.6 : 1;
+    const ex = Math.sign(c) * Math.pow(Math.abs(c), k), ey = Math.sign(s) * Math.pow(Math.abs(s), k);
+    pts.push([ex * rad(t), ey * rad(t)]);
+  }
+  // dopasowanie do prostokąta w × h
+  const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  return pts.map(([x, y]) => [((x - x0) / (x1 - x0) - 0.5) * w, ((y - y0) / (y1 - y0)) * h]);
+}
+
+// Miniatura lustra w katalogu – widok z przodu
+export function mirrorThumb(def) {
+  const v = def.variants[def.defaultVariant ?? 0];
+  const pts = mirrorOutline(def.shape, v.w, v.h);
+  const k = Math.min(52 / v.w, 34 / v.h);
+  const d = pts.map(([x, y], i) => `${i ? 'L' : 'M'}${f(30 + x * k)} ${f(37 - y * k)}`).join(' ') + ' Z';
+  const glow = def.opts && def.opts.hue ? `<path d="${d}" fill="none" stroke="#ffd6ad" stroke-width="4" opacity=".7"/>` : '';
+  return `<rect x="0" y="0" width="60" height="40" fill="#f2efe8"/>${glow}<path d="${d}" fill="#cfdde3" stroke="#6d7a80" stroke-width=".8"/>`;
 }
 
 // Wykończenie i rozstaw lameli elementu (z domyślnymi z katalogu)
@@ -368,6 +418,13 @@ export function drawShape(item, def) {
       break;
     }
     case 'plant3': s += drawPlant(def.plant, w, d, item.c); break;
+    case 'mirror': s += rect(-hw, -hd, w, d, 'body mirror2d', 1) + line(-hw + 2, hd - 0.6, hw - 2, hd - 0.6, 'ln strong'); break;
+    case 'washer_tower': {
+      s += rect(-hw, -hd, w, d, 'body', 2);
+      s += circle(0, 2, Math.min(w, d) * 0.3, 'body2') + circle(0, 2, Math.min(w, d) * 0.2);
+      s += `<text class="mark" x="0" y="${f(-hd + 8)}">2×</text>`;
+      break;
+    }
     case 'slats': case 'slat_partition': {
       const { fin, pat, slat } = slatSpec(item, def);
       const pitch = pat.slat + pat.gap;

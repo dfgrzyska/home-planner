@@ -30,11 +30,12 @@ Zmieniaj **tylko** `style`, `doors` (wykończenie/typ) oraz kolory mebli (`items
 | pole | wartości |
 | --- | --- |
 | `walls` | `{"1".."5": "#rrggbb"}` – 1 salon z aneksem, 2 pokój 2, 3 pokój 3, 4 łazienka, 5 przedpokój |
-| `floors` | `{"1".."5": klucz}` – `oak_light`, `oak_natural`, `walnut`, `oak_herringbone`, `oak_grey`, `tile_light`, `tile_grey`, `tile_large`, `concrete`, `terrazzo` |
+| `floors` | `{"1".."5": klucz}` – `oak_light`, `oak_natural`, `walnut`, `oak_herringbone`, `oak_grey`, `oak_dark_grey`, `tile_light`, `tile_grey`, `tile_large`, `tile_anthracite`, `gres_dark`, `concrete`, `concrete_dark`, `terrazzo` |
 | `balcony` | `deck`, `balcony_tile` (lub dowolny klucz posadzki) |
 | `kitchenFront` | `#rrggbb` |
 | `counter` | `oak`, `white_quartz`, `black_stone`, `concrete`, `marble` |
 | `frames` | `anthracite`, `white`, `black` (ramy okien) |
+| `tiles` | opcjonalnie `{"4": {"pattern": klucz, "height": 120\|210\|272}}` – płytki na ścianach pomieszczenia: `marble_white`, `concrete_grey`, `sand_beige`, `graphite`, `subway_white`, `zellige_green`, `terrazzo_wall` (`WALL_TILES` w `js/style.js`) |
 | `accent` | opcjonalnie `{"room": "1", "side": "n"/"s"/"e"/"w", "color": "#rrggbb"}` – ściana akcentowa (n = od klatki, s = od balkonu, e = wschodnia z oknami, w = zachodnia) |
 
 Drzwi (`doors`, obok `style` w dokumencie): `{"d1".."d4": {"type": "swing"|"hidden"|"sliding"|"none", "finish": "white"|"oak"|"walnut"|"graphite"|"black"|"entrance", "flipHinge": bool, "flipSwing": bool, "closed": bool}}` – d1 wejściowe, d2 łazienka, d3 pokój 2, d4 pokój 3 (`js/doors.js`). Zmieniaj tylko `finish`/`type`, gdy opis o to prosi („drzwi dębowe”, „drzwi ukryte w kolorze ściany”); kierunku otwierania nie ruszaj. Do zdjęć warto ustawić `closed: true` dla drzwi widocznych w kadrze.
@@ -42,6 +43,7 @@ Drzwi (`doors`, obok `style` w dokumencie): `{"d1".."d4": {"type": "swing"|"hidd
 Nazwy kolorów z palety aplikacji (`WALL_PALETTE`, `FRONTS` w `js/style.js`) – użyj ich, gdy pasują do opisu, inaczej dobierz hex sam.
 Lamele (`t`: `lamele_wall`, `lamele_tv`, `lamele_half`, `lamele_partition`): wykończenie w `o.finish` (`dab_czarny`, `orzech_czarny`, `dab_szary`, `czarne`, `biale`, `zielone`, `dab_bez`), rozstaw w `o.pattern` – listy w `js/catalog.js`.
 Światła (kategoria `hue` w `js/catalog.js`: paski `hue_flux`, `hue_omniglow`, `hue_strip_plus`, `hue_strip_vertical`, lampy `hue_signe_floor`, `hue_play_floor`, `hue_signe_table`, `hue_play_table`, `hue_iris`, `hue_go`, `hue_bloom`, `hue_twilight`, sufitowe/wiszące `hue_pendant`, `hue_being`, `hue_infuse`, `hue_surimu`, `hue_centris`, `hue_gu10`, girlanda `hue_festavia`; zwykła `lamp`): stan w `o` – `on` (bool), `color`, `color2` (gradient), `bright` (1–100), `dir` dla pasków (`up`/`out`/`down`); wysokość montażu `e` (cm). Podświetlenie TV: na elemencie `tv` ustaw `o.hue: true` (+ `color`, `color2`). Opis typu „wieczorem ciepłe światło 2700 K, pasek za TV na fioletowo” zamieniaj na te pola; kolory: `HUE_COLORS` w `js/lights.js`.
+Łazienka: lustra `mirror_led`, `mirror_led_round`, `mirror_arch`, `mirror_pebble`, `mirror_wave`, `mirror_cloud` (podświetlenie LED: `o.hue: true` + `color`), wieża `washer_tower`.
 Rośliny (`pl_*`, kategoria `rosliny`): kolor elementu `c` = kolor donicy, dla `pl_bukiet` = kolor kwiatów.
 Kolor mebla: `c` w elemencie (sofa – tkanina, stół/szafki – materiał frontu/blatu, dywan – kolor dywanu). Typy elementów: `t` (klucze z `js/catalog.js`).
 
@@ -97,6 +99,7 @@ python tools/comfy.py --image renders/<folder>/kitchen_3d.png --prompt-file rend
 ```
 
 - Czas na RTX 5060 Ti: ok. 45 s na obraz 1600×900 z `qwen-image-2.1` (domyślny), ok. 5 min na obraz 1 MP z `qwen-edit-gguf`. Przy kilku ujęciach uruchamiaj w tle i informuj użytkownika o postępie.
+- Pomieszczenia bez okien (łazienka, przedpokój): Qwen lubi dorysować okno przy krawędzi kadru. Dodaj do promptu zdanie, że pomieszczenie nie ma okien, a jeśli to nie pomoże – `--cfg 2.5 --negative "window, windows, window frame, view outside, plant, potted plant, decorations"` (przy cfg > 1 negatywny prompt działa, render trwa ok. 2× dłużej).
 - `--count N` daje N wariantów z różnymi seedami; `--seed` pozwala powtórzyć wynik.
 - `--ref` (obraz inspiracji) działa tylko z `qwen-image-2.1`.
 

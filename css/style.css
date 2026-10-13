@@ -207,6 +207,7 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 .item .pot { fill: #c9845f; }
 .item .leaf2d { fill: #5b8f45; stroke: #2f5427; stroke-width: .5; vector-effect: non-scaling-stroke; }
 .item .flower2d { fill: #f2a7c0; stroke: #a8566f; stroke-width: .5; vector-effect: non-scaling-stroke; }
+.item .mirror2d { fill: #cfdde3; }
 .item .lavender2d { fill: #9b7fd0; stroke: none; }
 .item .slat-outline { fill: none; stroke-dasharray: 2 2; }
 .item .body { fill: var(--fill); stroke: #3a3d44; stroke-width: 1.2; vector-effect: non-scaling-stroke; }

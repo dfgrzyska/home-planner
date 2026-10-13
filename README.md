@@ -27,6 +27,9 @@ Rzut jest odwzorowany wektorowo w skali 1:1 w centymetrach na podstawie rzutu 1:
   miejscu na ścianie z wysokością montażu i kierunkiem świecenia, lampy Signe / Play / Iris / Go / Bloom / Twilight,
   wiszące i sufitowe, girlanda Festavia, podświetlenie TV Hue Play Gradient; kolor, gradient, jasność, włącz/wyłącz.
 - **Dzień / Wieczór / Noc** w 3D: prawdziwe źródła światła z cieniami, poświata na ścianach, świecące klosze i paski.
+- **Łazienka**: płytki na ścianach (gres 60×120 marmur / beton / beż / grafit, cegiełka, zellige, lastryko) do 120 cm,
+  210 cm albo do sufitu – dla każdego pomieszczenia; lustra LED (prostokątne, okrągłe) i nieregularne (łuk, „kamyk”,
+  „fala”, „chmurka”) z opcjonalnym podświetleniem; wieża pralka + suszarka; ciemnoszare podłogi.
 - **Rośliny i kwiaty**: monstera, fikus, strelicja, oliwka, kentia, sansewieria, zamiokulkas, storczyk, bukiet, zioła, lawenda.
 - **Zwierzęta**: legowiska dobrane do wagi psa (labrador 35 kg → XL 110 × 85 cm), stojak z miskami.
 - **Wykończenie** (panel po prawej, gdy nic nie jest zaznaczone): kolor ścian i posadzka dla każdego pomieszczenia,

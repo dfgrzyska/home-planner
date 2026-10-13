@@ -58,6 +58,7 @@ def serve_repo():
 
 
 def render(doc: dict, cams, out: Path, size=(1600, 900), base=None, time="day") -> list:
+    out = out.resolve()  # Chrome zapisuje zrzut względem własnego katalogu – potrzebna ścieżka bezwzględna
     out.mkdir(parents=True, exist_ok=True)
     browser = find_browser()
     httpd = None

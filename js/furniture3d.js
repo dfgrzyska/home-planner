@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { heightOf, elevationOf } from './dims3d.js';
 import { lightOf } from './lights.js';
-import { slatSpec } from './shapes.js';
+import { slatSpec, mirrorOutline } from './shapes.js';
 export { heightOf, elevationOf } from './dims3d.js';
 
 // ---------------------------------------------------------------- światło
@@ -691,6 +691,50 @@ export function buildFurniture(it, def, style) {
       break;
     }
     case 'plant3': g.add(buildPlant(def.plant, w, d, H, col)); break;
+    case 'mirror': {
+      const pts = mirrorOutline(def.shape, w, H);
+      const shp = new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y)));
+      const geo = new THREE.ExtrudeGeometry(shp, { depth: 2, bevelEnabled: false, curveSegments: 1 });
+      const mesh = new THREE.Mesh(geo, [mat('#e6edf0', { rough: 0.03, metal: 1 }), dark()]);
+      mesh.position.z = -hd + 0.5;
+      g.add(mesh);
+      const L = lightOf(it, def);
+      if (L && L.on) {
+        // pasek LED za lustrem świeci na ścianę: odcinki wzdłuż krawędzi obrysu (prostokąt otaczający)
+        const z = -hd + 0.3, s2 = Math.SQRT1_2;
+        const edge = (pos, normal, len, vertical) => addLight(g, { kind: 'rect', pos, normal, len, thick: 1.5, vertical, color: L.color, lm: L.lm / 4, k: 0.7 });
+        edge([0, H - 4, z], [0, s2, -s2], w * 0.7, false);
+        edge([0, 4, z], [0, -s2, -s2], w * 0.7, false);
+        edge([-hw + 4, H / 2, z], [-s2, 0, -s2], H * 0.7, true);
+        edge([hw - 4, H / 2, z], [s2, 0, -s2], H * 0.7, true);
+        addLight(g, { kind: 'glow', pos: [0, H / 2, -hd], dir: [0, 0, -1], size: [w + 45, H + 45], shape: 'box', color: L.color, color2: L.color, lm: L.lm });
+        // świecąca krawędź widoczna przy ścianie
+        const rim = new THREE.Mesh(new THREE.ExtrudeGeometry(shp, { depth: 0.4, bevelEnabled: false, curveSegments: 1 }), glowMat(L.color, true, 1.2));
+        rim.scale.set(1.02, 1.02, 1); rim.position.set(0, -H * 0.01, -hd + 0.1);
+        g.add(rim);
+      }
+      break;
+    }
+    case 'washer_tower': {
+      const cab = H > 185;
+      const appl = (y0) => {
+        box(g, cab ? w - 6 : w, 85, cab ? d - 6 : d, 0, y0, cab ? -3 : 0, lacquer('#f2f2f0'));
+        const door = cyl(g, Math.min(w, 85) * 0.22, 2, 0, 0, 0, mat('#3c4248', { rough: 0.15, metal: 0.4 }));
+        door.rotation.x = Math.PI / 2; door.position.set(0, y0 + 45, (cab ? d / 2 - 3 : hd) + 1);
+        box(g, (cab ? w - 6 : w) - 6, 8, 0.4, 0, y0 + 73, (cab ? d / 2 - 3 : hd) + 0.2, mat('#d8d9da', { rough: 0.4 }));
+      };
+      appl(0);
+      box(g, cab ? w - 6 : w, 2, cab ? d - 6 : d, 0, 85, cab ? -3 : 0, metal('#b7b9bb'));
+      appl(87);
+      if (cab) {
+        const m = lacquer(col || '#f1f0ec');
+        box(g, 3, H, d, -hw + 1.5, 0, 0, m); box(g, 3, H, d, hw - 1.5, 0, 0, m);
+        box(g, w, 3, d, 0, H - 3, 0, m);
+        box(g, w - 6, H - 175, d - 2, 0, 175, -1, m);
+      }
+      break;
+    }
+
     case 'slats': case 'slat_partition': {
       const { fin, pat, slat } = slatSpec(it, def);
       const m = fin.mdf || col ? lacquer(slat) : wood(slat);

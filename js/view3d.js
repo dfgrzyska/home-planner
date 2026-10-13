@@ -9,8 +9,8 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 import { PLAN } from './plan.js';
 import { CATALOG_BY_KEY } from './catalog.js';
-import { FLOORS, COUNTERS, FRAMES } from './style.js';
-import { floorCanvas } from './textures.js';
+import { FLOORS, COUNTERS, FRAMES, WALL_TILES } from './style.js';
+import { floorCanvas, wallTileCanvas } from './textures.js';
 import { buildFurniture, elevationOf, heightOf, mat } from './furniture3d.js';
 import { doorOptions, doorGeometry, dirOf, isClosed, DOOR_FINISHES } from './doors.js';
 
@@ -133,7 +133,7 @@ function subtract(range, covers) {
 class QuadBatch {
   constructor() { this.groups = new Map(); }
   add(key, pts, n) {
-    if (!this.groups.has(key)) this.groups.set(key, { pos: [], nor: [] });
+    if (!this.groups.has(key)) this.groups.set(key, { pos: [], nor: [], uv: [] });
     const g = this.groups.get(key);
     const [a, b, c, d] = pts;
     // kolejność wierzchołków zgodna z normalną
@@ -142,7 +142,7 @@ class QuadBatch {
     const cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx;
     const flip = cx * n[0] + cy * n[1] + cz * n[2] < 0;
     const tri = flip ? [a, c, b, a, d, c] : [a, b, c, a, c, d];
-    for (const p of tri) { g.pos.push(p[0] * M, p[1] * M, p[2] * M); g.nor.push(...n); }
+    for (const p of tri) { g.pos.push(p[0] * M, p[1] * M, p[2] * M); g.nor.push(...n); g.uv.push(p[0] + p[2], p[1]); }
   }
   meshes(materialFor) {
     const out = [];
@@ -150,6 +150,7 @@ class QuadBatch {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.Float32BufferAttribute(g.pos, 3));
       geo.setAttribute('normal', new THREE.Float32BufferAttribute(g.nor, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(g.uv, 2));
       const { material, cast } = materialFor(key);
       const m = new THREE.Mesh(geo, material);
       m.castShadow = cast; m.receiveShadow = true;
@@ -157,6 +158,22 @@ class QuadBatch {
     }
     return out;
   }
+}
+
+
+const tileTexCache = new Map();
+function tileMaterial(key, aniso) {
+  if (!tileTexCache.has(key)) {
+    const def = WALL_TILES[key];
+    const { canvas, tw, th } = wallTileCanvas(def, key.length * 7 + 3);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = aniso;
+    tex.repeat.set(1 / tw, 1 / th); // UV ścian są w centymetrach
+    tileTexCache.set(key, new THREE.MeshStandardMaterial({ map: tex, roughness: def.gloss ? 0.18 : 0.55, metalness: 0 }));
+  }
+  return tileTexCache.get(key);
 }
 
 // Kolor lica ściany: region po stronie lica + strona bryły (lico 'n' bryły to ściana południowa pokoju powyżej)
@@ -169,44 +186,64 @@ function wallColor(style, region, side) {
   return style.walls[region] || REVEAL;
 }
 
-function wallFaces(doc, style, cut) {
+function wallFaces(doc, style, cut, aniso = 8) {
   const solids = collectSolids(doc, cut);
   const batch = new QuadBatch();
   const colorFor = (region, side) => wallColor(style, region, side);
-  const STEP = 2;
+  // Punkty podziału lica: krawędzie innych brył, pomieszczeń, okien i otworów drzwiowych –
+  // odcinki zaczynają się i kończą dokładnie na krawędziach, więc w narożnikach nie ma szczelin.
+  const edgeRects = [
+    ...solids.map((o) => o.rect),
+    ...PLAN.rooms.flatMap((r) => r.floor),
+    ...PLAN.windows.map((w) => w.rect),
+    ...PLAN.doors.map((d) => d.gap),
+  ];
   for (const S of solids) {
     const [x, y, w, h] = S.rect;
     const faces = [
-      { side: 'n', len: w, at: (t) => [x + t, y], out: [0, -1] },
-      { side: 's', len: w, at: (t) => [x + t, y + h], out: [0, 1] },
-      { side: 'w', len: h, at: (t) => [x, y + t], out: [-1, 0] },
-      { side: 'e', len: h, at: (t) => [x + w, y + t], out: [1, 0] },
+      { side: 'n', len: w, at: (t) => [x + t, y], out: [0, -1], horiz: true },
+      { side: 's', len: w, at: (t) => [x + t, y + h], out: [0, 1], horiz: true },
+      { side: 'w', len: h, at: (t) => [x, y + t], out: [-1, 0], horiz: false },
+      { side: 'e', len: h, at: (t) => [x + w, y + t], out: [1, 0], horiz: false },
     ];
     for (const f of faces) {
-      const n = Math.max(1, Math.round(f.len / STEP));
-      const cell = f.len / n;
+      const origin = f.horiz ? x : y;
+      const cuts = new Set([0, f.len]);
+      for (const [rx, ry, rw, rh] of edgeRects) {
+        for (const e of f.horiz ? [rx, rx + rw] : [ry, ry + rh]) {
+          const t = e - origin;
+          if (t > 0.01 && t < f.len - 0.01) cuts.add(Math.round(t * 100) / 100);
+        }
+      }
+      const ts = [...cuts].sort((a, b) => a - b);
       let run = null;
       const flush = (endT) => {
         if (!run) return;
         const [ax, ay] = f.at(run.t0), [bx, by] = f.at(endT);
         for (const [h0, h1] of run.vis) {
-          const pts = [[ax, h0, ay], [bx, h0, by], [bx, h1, by], [ax, h1, ay]];
-          batch.add(`${run.color}|${S.kind}`, pts, [f.out[0], 0, f.out[1]]);
+          const quad = (a, b, key) => { if (b - a > 0.05) batch.add(key, [[ax, a, ay], [bx, a, by], [bx, b, by], [ax, b, ay]], [f.out[0], 0, f.out[1]]); };
+          if (run.tile) {
+            const th = run.tile.height;
+            quad(h0, Math.min(h1, th), `tile:${run.tile.pattern}|${S.kind}`);
+            quad(Math.max(h0, th), h1, `${run.color}|${S.kind}`);
+          } else quad(h0, h1, `${run.color}|${S.kind}`);
         }
         run = null;
       };
-      for (let i = 0; i < n; i++) {
-        const t = (i + 0.5) * cell;
-        const [px, py] = f.at(t);
+      for (let i = 0; i + 1 < ts.length; i++) {
+        const t0 = ts[i], t1 = ts[i + 1];
+        const [px, py] = f.at((t0 + t1) / 2);
         const sx = px + f.out[0] * 1.5, sy = py + f.out[1] * 1.5;
         const covers = [];
         for (const o of solids) if (o !== S && inRect(o.rect, sx, sy)) covers.push([o.y0, o.y1]);
         const vis = subtract([S.y0, S.y1], covers);
-        const color = S.kind === 'ctx' ? '#b9b7b2' : colorFor(regionAt(sx, sy), f.side);
-        const sig = color + JSON.stringify(vis);
+        const region = regionAt(sx, sy);
+        const color = S.kind === 'ctx' ? '#b9b7b2' : colorFor(region, f.side);
+        const tile = S.kind !== 'ctx' && style.tiles && style.tiles[region];
+        const sig = color + JSON.stringify(vis) + (tile ? tile.pattern + tile.height : '');
         if (run && run.sig === sig) continue;
-        flush(i * cell);
-        if (vis.length) run = { t0: i * cell, sig, vis, color };
+        flush(t0);
+        if (vis.length) run = { t0, sig, vis, color, tile };
       }
       flush(f.len);
     }
@@ -220,6 +257,7 @@ function wallFaces(doc, style, cut) {
   }
   return batch.meshes((key) => {
     const [color, kind] = key.split('|');
+    if (color.startsWith('tile:')) return { material: tileMaterial(color.slice(5), aniso), cast: true };
     const material = mat(color, { rough: 0.92 });
     return { material, cast: true };
   });
@@ -375,7 +413,7 @@ export class View3D {
     const aniso = this.renderer.capabilities.getMaxAnisotropy();
     const cut = this.opts.cut ? 110 : 0;
     this.solids = collectSolids(doc, cut);
-    for (const m of wallFaces(doc, style, cut)) this.structure.add(m);
+    for (const m of wallFaces(doc, style, cut, aniso)) this.structure.add(m);
     this.shadowDirty = true;
     this.furnKey = null; // poświaty zależą od położenia ścian
 

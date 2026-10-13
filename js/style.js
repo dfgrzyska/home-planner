@@ -29,11 +29,27 @@ export const FLOORS = {
   tile_light: { name: 'Płytki jasne 60×60', kind: 'tiles', base: '#e7e4dd', size: 60, var: 0.02 },
   tile_grey: { name: 'Płytki szare 60×60', kind: 'tiles', base: '#9d9a95', size: 60, var: 0.02 },
   tile_large: { name: 'Gres 120×60 beżowy', kind: 'tiles', base: '#d6cbbb', size: 120, size2: 60, var: 0.02 },
+  tile_anthracite: { name: 'Płytki antracyt 60×60', kind: 'tiles', base: '#4b4d51', size: 60, var: 0.02 },
+  gres_dark: { name: 'Gres ciemnoszary 120×60', kind: 'tiles', base: '#5a5c60', size: 120, size2: 60, var: 0.02 },
+  oak_dark_grey: { name: 'Dąb ciemnoszary – deska', kind: 'planks', base: '#5e5853', var: 0.06 },
+  concrete_dark: { name: 'Mikrocement ciemnoszary', kind: 'concrete', base: '#6b6a67', var: 0.05 },
   concrete: { name: 'Beton / mikrocement', kind: 'concrete', base: '#b4b1ab', var: 0.06 },
   terrazzo: { name: 'Lastryko', kind: 'terrazzo', base: '#e4e0d8', var: 0.03 },
   deck: { name: 'Deska tarasowa', kind: 'planks', base: '#8c6a4c', var: 0.1, plank: 14 },
   balcony_tile: { name: 'Płyty tarasowe szare', kind: 'tiles', base: '#a9a69f', size: 60, var: 0.03 },
 };
+
+// Płytki ścienne (gres, cegiełka, zellige…): wymiary płytki w cm, kind = sposób rysowania tekstury
+export const WALL_TILES = {
+  marble_white: { name: 'Gres marmur biały 60×120', kind: 'slab', base: '#eeece8', w: 60, h: 120, veins: '#b9b6b0', gloss: true },
+  concrete_grey: { name: 'Gres beton szary 60×120', kind: 'slab', base: '#a9a7a2', w: 60, h: 120, noise: 0.07 },
+  sand_beige: { name: 'Gres beż piaskowy 60×120', kind: 'slab', base: '#d6c8b3', w: 60, h: 120, noise: 0.05 },
+  graphite: { name: 'Gres grafitowy mat 60×120', kind: 'slab', base: '#4a4c50', w: 60, h: 120, noise: 0.05 },
+  subway_white: { name: 'Cegiełka biała 7,5×30 (połysk)', kind: 'subway', base: '#f3f2ee', w: 30, h: 7.5, gloss: true },
+  zellige_green: { name: 'Zellige butelkowa zieleń 10×10', kind: 'zellige', base: '#2f5a46', w: 10, h: 10, gloss: true },
+  terrazzo_wall: { name: 'Lastryko 60×60', kind: 'terrazzo', base: '#e4e0d8', w: 60, h: 60 },
+};
+export const TILE_HEIGHTS = [{ v: 120, l: 'do 120 cm' }, { v: 210, l: 'do 210 cm' }, { v: 272, l: 'do sufitu' }];
 
 export const FRONTS = [
   { name: 'Biały mat', hex: '#f1f0ec' },
@@ -67,6 +83,7 @@ export const DEFAULT_STYLE = {
   counter: 'oak',
   balcony: 'balcony_tile',
   frames: 'anthracite',
+  tiles: {}, // { '4': { pattern: 'marble_white', height: 272 } }
 };
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -86,6 +103,15 @@ export function normalizeStyle(s) {
   out.counter = COUNTERS[s.counter] ? s.counter : d.counter;
   out.balcony = FLOORS[s.balcony] ? s.balcony : d.balcony;
   out.frames = FRAMES[s.frames] ? s.frames : d.frames;
+  out.tiles = {};
+  if (s.tiles && typeof s.tiles === 'object') {
+    for (const [room, t] of Object.entries(s.tiles)) {
+      if (out.walls[room] && t && WALL_TILES[t.pattern]) {
+        const height = TILE_HEIGHTS.some((x) => x.v === t.height) ? t.height : 272;
+        out.tiles[room] = { pattern: t.pattern, height };
+      }
+    }
+  }
   if (s.accent && typeof s.accent === 'object') {
     // ściana akcentowa: { room: '1', side: 'n'|'s'|'e'|'w', color: '#hex' }
     const a = s.accent;

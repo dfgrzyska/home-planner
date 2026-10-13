@@ -212,6 +212,28 @@ export const CATALOG = [
   { key: 'washer', name: 'Pralka', cat: 'lazienka', kind: 'washer', w: 60, d: 60,
     variants: [{ l: 'standard 60 × 60', w: 60, d: 60 }, { l: 'slim 60 × 45', w: 60, d: 45 }] },
   { key: 'dryer', name: 'Suszarka', cat: 'lazienka', kind: 'washer', w: 60, d: 60 },
+  // Lustra: w × h (wysokość w 3D), d = 3 cm od ściany; shape = obrys (js/shapes.js → mirrorOutline);
+  // podświetlenie LED jako opcja (lightOption), w lustrach LED domyślnie włączone
+  { key: 'mirror_led', name: 'Lustro z podświetleniem LED', hint: 'prostokątne, poświata na ścianie', cat: 'lazienka', kind: 'mirror', shape: 'rect', w: 80, d: 3, layer: 2,
+    variants: [{ l: '60 × 80', w: 60, d: 3, h: 80 }, { l: '80 × 70', w: 80, d: 3, h: 70 }, { l: '100 × 70', w: 100, d: 3, h: 70 }, { l: '120 × 80', w: 120, d: 3, h: 80 }], defaultVariant: 1,
+    lightOption: { name: 'Podświetlenie LED', type: 'mirror', lm: 700 }, lightDefaults: { color: '#ffd6ad' }, opts: { hue: true } },
+  { key: 'mirror_led_round', name: 'Lustro okrągłe LED', cat: 'lazienka', kind: 'mirror', shape: 'round', w: 80, d: 3, layer: 2, square: true,
+    variants: [{ l: 'Ø 60', w: 60, d: 3, h: 60 }, { l: 'Ø 80', w: 80, d: 3, h: 80 }, { l: 'Ø 100', w: 100, d: 3, h: 100 }], defaultVariant: 1,
+    lightOption: { name: 'Podświetlenie LED', type: 'mirror', lm: 650 }, lightDefaults: { color: '#ffd6ad' }, opts: { hue: true } },
+  { key: 'mirror_arch', name: 'Lustro łukowe', hint: 'zaokrąglona góra', cat: 'lazienka', kind: 'mirror', shape: 'arch', w: 60, d: 3, layer: 2,
+    variants: [{ l: '50 × 90', w: 50, d: 3, h: 90 }, { l: '60 × 120', w: 60, d: 3, h: 120 }, { l: '80 × 160', w: 80, d: 3, h: 160 }], defaultVariant: 0,
+    lightOption: { name: 'Podświetlenie LED', type: 'mirror', lm: 600 }, lightDefaults: { color: '#ffd6ad' }, opts: { hue: false } },
+  { key: 'mirror_pebble', name: 'Lustro organiczne „kamyk”', hint: 'nieregularny, miękki kształt', cat: 'lazienka', kind: 'mirror', shape: 'pebble', w: 70, d: 3, layer: 2,
+    variants: [{ l: 'pionowe 70 × 90', w: 70, d: 3, h: 90 }, { l: 'poziome 90 × 60', w: 90, d: 3, h: 60 }],
+    lightOption: { name: 'Podświetlenie LED', type: 'mirror', lm: 600 }, lightDefaults: { color: '#ffd6ad' }, opts: { hue: false } },
+  { key: 'mirror_wave', name: 'Lustro „fala”', hint: 'falista krawędź', cat: 'lazienka', kind: 'mirror', shape: 'wave', w: 60, d: 3, layer: 2,
+    variants: [{ l: '60 × 80', w: 60, d: 3, h: 80 }, { l: '70 × 100', w: 70, d: 3, h: 100 }],
+    lightOption: { name: 'Podświetlenie LED', type: 'mirror', lm: 600 }, lightDefaults: { color: '#ffd6ad' }, opts: { hue: false } },
+  { key: 'mirror_cloud', name: 'Lustro „chmurka”', hint: 'zaokrąglone wybrzuszenia', cat: 'lazienka', kind: 'mirror', shape: 'cloud', w: 80, d: 3, layer: 2,
+    variants: [{ l: '80 × 60', w: 80, d: 3, h: 60 }, { l: '100 × 75', w: 100, d: 3, h: 75 }],
+    lightOption: { name: 'Podświetlenie LED', type: 'mirror', lm: 600 }, lightDefaults: { color: '#ffd6ad' }, opts: { hue: false } },
+  { key: 'washer_tower', name: 'Pralka + suszarka (wieża)', hint: 'suszarka na pralce, 60 × 62', cat: 'lazienka', kind: 'washer_tower', w: 60, d: 62,
+    variants: [{ l: 'wolnostojąca wieża – 172 cm', w: 60, d: 62, h: 172 }, { l: 'w słupku z drzwiami – 66 × 66, 200 cm', w: 66, d: 66, h: 200 }] },
   { key: 'bath_cabinet', name: 'Szafka / słupek łazienkowy', cat: 'lazienka', kind: 'cabinet', w: 40, d: 30 },
 
   // Przedpokój

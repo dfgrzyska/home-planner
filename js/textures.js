@@ -35,6 +35,62 @@ function grain(ctx, x, y, w, h, base, r, vertical = false) {
   ctx.restore();
 }
 
+// Płytki ścienne: tekstura obejmuje kilka płytek; zwraca { canvas, tw, th } – rozmiar tekstury w cm
+export function wallTileCanvas(def, seed = 11) {
+  const r = rng(seed);
+  const cols = def.kind === 'slab' || def.kind === 'terrazzo' ? 2 : 4;
+  const rows = def.kind === 'subway' ? 4 : def.kind === 'slab' ? 1 : def.kind === 'terrazzo' ? 2 : 4;
+  const tw = def.w * cols, th = def.h * rows;
+  const S = 1024;
+  const c = document.createElement('canvas');
+  c.width = S; c.height = Math.round((S * th) / tw);
+  const ctx = c.getContext('2d');
+  const px = S / tw;
+  ctx.fillStyle = shade(def.base, -0.12);
+  ctx.fillRect(0, 0, c.width, c.height);
+  const grout = Math.max(1.5, 0.3 * px);
+  for (let j = 0; j < rows; j++) {
+    const off = def.kind === 'subway' && j % 2 ? def.w / 2 : 0;
+    for (let i = -1; i <= cols; i++) {
+      const x = (i * def.w + off) * px, y = j * def.h * px, w = def.w * px, h = def.h * px;
+      const tone = def.kind === 'zellige' ? (r() - 0.5) * 0.35 : (r() - 0.5) * 0.04;
+      ctx.fillStyle = shade(def.base, tone);
+      ctx.fillRect(x + grout / 2, y + grout / 2, w - grout, h - grout);
+      ctx.save();
+      ctx.beginPath(); ctx.rect(x + grout / 2, y + grout / 2, w - grout, h - grout); ctx.clip();
+      if (def.noise) for (let k = 0; k < 900; k++) {
+        ctx.fillStyle = shade(def.base, (r() - 0.5) * def.noise * 3); ctx.globalAlpha = 0.2;
+        ctx.beginPath(); ctx.arc(x + r() * w, y + r() * h, 2 + r() * 18, 0, Math.PI * 2); ctx.fill();
+      }
+      if (def.veins) for (let k = 0; k < 5; k++) {
+        ctx.strokeStyle = def.veins; ctx.globalAlpha = 0.35 + r() * 0.3; ctx.lineWidth = 0.8 + r() * 2.2;
+        ctx.beginPath();
+        let vx = x + r() * w, vy = y;
+        ctx.moveTo(vx, vy);
+        for (let q = 0; q < 6; q++) { vx += (r() - 0.5) * w * 0.5; vy += h / 6; ctx.lineTo(vx, vy); }
+        ctx.stroke();
+      }
+      if (def.kind === 'zellige') {
+        // ręcznie robione płytki: jaśniejsze krawędzie i plamy szkliwa
+        const g = ctx.createRadialGradient(x + w * (0.3 + r() * 0.4), y + h * (0.3 + r() * 0.4), 2, x + w / 2, y + h / 2, w * 0.8);
+        g.addColorStop(0, 'rgba(255,255,255,0.18)'); g.addColorStop(1, 'rgba(0,0,0,0.12)');
+        ctx.globalAlpha = 1; ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+      }
+      if (def.kind === 'terrazzo') {
+        const tc = ['#b9b2a6', '#8f8a82', '#c46f4f', '#6f7d73', '#f5f2ec'];
+        for (let k = 0; k < 160; k++) {
+          ctx.fillStyle = tc[Math.floor(r() * tc.length)]; ctx.globalAlpha = 0.85;
+          const sz = 1.5 + r() * 5;
+          ctx.beginPath(); ctx.ellipse(x + r() * w, y + r() * h, sz, sz * 0.7, r() * 3, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
+  }
+  return { canvas: c, tw, th };
+}
+
 // Zwraca { canvas, tile } – tile = rozmiar kafla w cm
 export function floorCanvas(def, seed = 7) {
   const r = rng(seed);

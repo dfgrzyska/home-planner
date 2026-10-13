@@ -16,11 +16,11 @@ export const H_BY_KIND = {
   k_base: 90, k_corner: 90, k_sink: 90, k_hob: 90, k_oven: 215, k_fridge: 185, k_appliance: 90, k_wall: 72, k_island: 90,
   bath: 55, shower: 200, washbasin: 85, wc: 40, washer: 85, lounger: 45, plant: 60, lamp: 165, rug: 1, rug_round: 1, radiator: 60, box: 75,
   slats: 270, slat_partition: 272, led_strip: 1.5, led_strip_v: 200, light_tube: 5, light_bar: 25, signe: 145, iris: 19, go: 15, bloom: 10, twilight: 28,
-  pendant: 28, being: 6, ceiling_round: 10, ceiling_panel: 5, centris: 10, downlight: 2, string_lights: 3, plant3: 100, pet_bed: 22, pet_bed_round: 22, pet_bowls: 30,
+  pendant: 28, being: 6, ceiling_round: 10, ceiling_panel: 5, centris: 10, downlight: 2, string_lights: 3, plant3: 100, mirror: 80, washer_tower: 172, pet_bed: 22, pet_bed_round: 22, pet_bowls: 30,
 };
 // Montaż od podłogi dla elementów na ścianie
 export const E_BY_KIND = {
-  tv: 75, k_wall: 145, radiator: 15, led_strip: 230, led_strip_v: 20, light_tube: 52, light_bar: 52, signe: 0, iris: 50, go: 50, bloom: 0, twilight: 50,
+  tv: 75, k_wall: 145, radiator: 15, mirror: 105, led_strip: 230, led_strip_v: 20, light_tube: 52, light_bar: 52, signe: 0, iris: 50, go: 50, bloom: 0, twilight: 50,
   pendant: 150, being: 165, ceiling_round: 262, ceiling_panel: 267, centris: 262, downlight: 270, string_lights: 210, plant3: 0,
 };
 const E_BY_KEY = { hue_signe_table: 85, hue_play_table: 85, pl_storczyk: 76, pl_bukiet: 76, pl_ziola: 85 };

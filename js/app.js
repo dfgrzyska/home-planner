@@ -1,8 +1,8 @@
 import { PLAN, DEFAULT_ITEMS } from './plan.js';
 import { CATALOG, CATALOG_BY_KEY, CATEGORIES } from './catalog.js';
-import { drawShape, slatThumb } from './shapes.js';
+import { drawShape, slatThumb, mirrorThumb } from './shapes.js';
 import { store, encodeDoc, decodeDoc, buildShareUrl, readHashCode, readHashParams } from './storage.js';
-import { normalizeStyle, WALL_PALETTE, FLOORS, FRONTS, COUNTERS, FRAMES, paletteName } from './style.js';
+import { normalizeStyle, WALL_PALETTE, FLOORS, FRONTS, COUNTERS, FRAMES, WALL_TILES, TILE_HEIGHTS, paletteName } from './style.js';
 import { heightOf, elevationOf } from './dims3d.js';
 import { HUE_COLORS, LIGHT_DIRS, lightOf } from './lights.js';
 import { DOOR_TYPES, DOOR_FINISHES, DOOR_NAMES, doorOptions, normalizeDoors, doorGeometry, dirOf, isClosed } from './doors.js';
@@ -840,6 +840,12 @@ function finishHtml() {
   h += swatches(WALL_PALETTE, st.walls[finishRoom], 'data-wall');
   h += `<label class="field"><span>Posadzka</span><select data-floor>` +
     Object.entries(FLOORS).map(([k, f]) => `<option value="${k}"${st.floors[finishRoom] === k ? ' selected' : ''}>${esc(f.name)}</option>`).join('') + `</select></label>`;
+  const tl = st.tiles && st.tiles[finishRoom];
+  h += `<div class="grid2"><label class="field"><span>Płytki na ścianach</span><select data-tiles>` +
+    `<option value="">brak – tylko farba</option>` +
+    Object.entries(WALL_TILES).map(([k, t]) => `<option value="${k}"${tl && tl.pattern === k ? ' selected' : ''}>${esc(t.name)}</option>`).join('') + `</select></label>` +
+    `<label class="field"><span>Wysokość płytek</span><select data-tiles-h${tl ? '' : ' disabled'}>` +
+    TILE_HEIGHTS.map((x) => `<option value="${x.v}"${(tl ? tl.height : 272) === x.v ? ' selected' : ''}>${x.l}</option>`).join('') + `</select></label></div>`;
   const acc = st.accent && st.accent.room === finishRoom ? st.accent : null;
   h += `<div class="field"><span>Ściana akcentowa w: ${esc(room.short)}</span><div class="accent-row"><select data-accent-side>` +
     SIDES.map(([k, l]) => `<option value="${k}"${(acc ? acc.side : '') === k ? ' selected' : ''}>${l}</option>`).join('') +
@@ -880,6 +886,12 @@ function bindFinish() {
   }
   const sel = (q, fn) => { const el = p.querySelector(q); if (el) el.onchange = () => setStyle((st) => fn(st, el.value)); };
   sel('[data-floor]', (st, v) => { st.floors[finishRoom] = v; });
+  sel('[data-tiles]', (st, v) => {
+    st.tiles = { ...(st.tiles || {}) };
+    if (!v) delete st.tiles[finishRoom];
+    else st.tiles[finishRoom] = { pattern: v, height: (st.tiles[finishRoom] && st.tiles[finishRoom].height) || (finishRoom === '4' ? 272 : 120) };
+  });
+  sel('[data-tiles-h]', (st, v) => { if (st.tiles && st.tiles[finishRoom]) st.tiles[finishRoom] = { ...st.tiles[finishRoom], height: +v }; });
   sel('[data-counter]', (st, v) => { st.counter = v; });
   sel('[data-frames]', (st, v) => { st.frames = v; });
   sel('[data-balcony]', (st, v) => { st.balcony = v; });
@@ -910,7 +922,9 @@ function renderCatalog(filter = '') {
       const w = v ? v.w : c.w, d = v ? v.d : c.d;
       const sz = c.range ? `${c.range.min}–${c.range.max} × ${d}` : c.square ? `Ø ${w}` : `${w} × ${d}`;
       h += `<div class="card cat-${c.cat}" data-key="${c.key}" title="Przeciągnij na plan lub kliknij, aby dodać">` +
-        (c.finishes
+        (c.kind === 'mirror'
+          ? `<svg class="thumb" viewBox="0 0 60 40" preserveAspectRatio="xMidYMid meet">${mirrorThumb(c)}</svg>`
+          : c.finishes
           ? `<svg class="thumb" viewBox="0 0 60 40" preserveAspectRatio="xMidYMid meet">${slatThumb(c)}</svg>`
           : `<svg class="thumb" viewBox="${-w / 2 - 6} ${-d / 2 - 6} ${w + 12} ${d + 12}" preserveAspectRatio="xMidYMid meet"><g class="item cat-${c.cat}">${drawShape({ w, d, o: { ...(c.opts || {}), chairs: false } }, c)}</g></svg>`) +
         `<div class="card-text"><div class="card-name">${esc(c.name)}</div><div class="card-size">${c.hint ? esc(c.hint) : `${sz} cm${c.variants ? ` · ${c.variants.length} warianty` : ''}`}</div></div></div>`;
