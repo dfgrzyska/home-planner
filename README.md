@@ -19,6 +19,17 @@ Rzut jest odwzorowany wektorowo w skali 1:1 w centymetrach na podstawie rzutu 1:
 - **Autozapis w localStorage**, nazwane wersje (Projekty), eksport/import JSON.
 - **Udostępnianie linkiem** – cały układ jest skompresowany w adresie (`#p=…`), bez serwera.
 - Cofnij/ponów (Ctrl+Z / Ctrl+Y), skróty klawiszowe (R, Q/E, strzałki, Del, Ctrl+D, F, spacja).
+- **Widok 3D** (Three.js, ładowany z CDN dopiero po przełączeniu): ściany 272 cm, obniżenie sufitu 249 cm, otwory okien
+  i drzwi, meble jako bryły, gotowe ujęcia kamery, przekrój, eksport PNG. Meble można zaznaczać i przesuwać także w 3D.
+- **Wykończenie** (panel po prawej, gdy nic nie jest zaznaczone): kolor ścian i posadzka dla każdego pomieszczenia,
+  ściana akcentowa, fronty kuchenne, blat, ramy okien, posadzka balkonu – zapisywane w projekcie i w linku.
+
+## Fotorealistyczne wizualizacje (skill `/wizualizacja`)
+
+Skill Claude Code w `.claude/skills/wizualizacja/` zamienia projekt w zdjęcia: ustawia wykończenie z opisu słownego,
+renderuje ujęcia 3D (`tools/render3d.py`, headless Chrome/Edge) i przepuszcza je przez lokalne ComfyUI
+(`tools/comfy.py`, Qwen Image Edit). Szablony workflow: `tools/workflows/`, ustawienia: `tools/config.json`
+(+ `tools/config.local.json` z lokalną ścieżką do ComfyUI, poza repozytorium). Wyniki trafiają do `renders/`.
 
 ## Uruchomienie lokalne
 
@@ -43,6 +54,9 @@ Settings → Pages → *Deploy from a branch* → `main` / `/ (root)`.
 | `js/shapes.js` | rysunki mebli (SVG) |
 | `js/storage.js` | localStorage + kodowanie projektu w linku |
 | `js/app.js` | edytor: renderowanie, drag & drop, przyciąganie, kolizje, panel, historia |
+| `js/view3d.js`, `js/furniture3d.js` | scena 3D: ściany z kolorami pomieszczeń, okna, drzwi, posadzki, bryły mebli |
+| `js/style.js`, `js/textures.js` | palety kolorów, posadzki (proceduralne tekstury), domyślne wykończenie |
+| `tools/` | skrypty skilla: link ↔ JSON, render 3D, klient ComfyUI |
 | `assets/plan-lm25.png` | wycinek rzutu z PDF używany jako podkład kontrolny |
 
 Układ współrzędnych: (0, 0) to wewnętrzny narożnik ścian północnej i zachodniej (lewy górny róg przedpokoju),

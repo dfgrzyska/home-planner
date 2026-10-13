@@ -77,6 +77,15 @@ export function buildShareUrl(code) {
   return url.toString();
 }
 
+export function readHashParams() {
+  const out = {};
+  for (const part of window.location.hash.replace(/^#/, '').split('&')) {
+    const i = part.indexOf('=');
+    if (i > 0) out[decodeURIComponent(part.slice(0, i))] = decodeURIComponent(part.slice(i + 1));
+  }
+  return out;
+}
+
 export function readHashCode() {
   const m = window.location.hash.match(/[#&]p=([A-Za-z0-9_-]+)/);
   return m ? m[1] : null;

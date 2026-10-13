@@ -1,7 +1,9 @@
 import { PLAN, DEFAULT_ITEMS } from './plan.js';
 import { CATALOG, CATALOG_BY_KEY, CATEGORIES } from './catalog.js';
 import { drawShape } from './shapes.js';
-import { store, encodeDoc, decodeDoc, buildShareUrl, readHashCode } from './storage.js';
+import { store, encodeDoc, decodeDoc, buildShareUrl, readHashCode, readHashParams } from './storage.js';
+import { normalizeStyle, WALL_PALETTE, FLOORS, FRONTS, COUNTERS, FRAMES, paletteName } from './style.js';
+import { heightOf, elevationOf } from './dims3d.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const $ = (sel, el = document) => el.querySelector(sel);
@@ -11,7 +13,9 @@ const norm360 = (a) => ((Math.round(a * 10) / 10) % 360 + 360) % 360;
 
 // ---------------------------------------------------------------- stan
 
-let doc = { v: 1, plan: PLAN.id, items: [], demo: [] };
+let doc = { v: 1, plan: PLAN.id, items: [], demo: [], style: normalizeStyle() };
+const hashParams = readHashParams(); // v=3d, cam=…, shot=1 (tryb zrzutu dla skryptów)
+const shotMode = hashParams.shot === '1';
 let nextId = 1;
 let selectedId = null;
 let lastSnap = null;
@@ -51,6 +55,8 @@ function normalizeItem(raw) {
   else if (def.opts) it.o = { ...def.opts };
   if (raw.n) it.n = String(raw.n).slice(0, 60);
   if (raw.c) it.c = raw.c;
+  if (Number.isFinite(Number(raw.h)) && raw.h !== null && raw.h !== '') it.h = Number(raw.h);
+  if (Number.isFinite(Number(raw.e)) && raw.e !== null && raw.e !== '') it.e = Number(raw.e);
   nextId = Math.max(nextId, it.id + 1);
   return it;
 }
@@ -62,11 +68,12 @@ function loadDoc(d, { keepHistory = false } = {}) {
     v: 1, plan: PLAN.id,
     items: items.map((i) => normalizeItem({ ...i, id: keepHistory ? i.id : undefined })),
     demo: Array.isArray(d && d.demo) ? d.demo.filter((id) => PLAN.partitions.some((p) => p.id === id)) : [],
+    style: normalizeStyle(d && d.style),
   };
   if (!keepHistory) {
     undoStack.length = 0; redoStack.length = 0;
     lastSnap = JSON.stringify(doc);
-    store.saveCurrent(doc);
+    if (!shotMode) store.saveCurrent(doc);
   }
   if (!getItem(selectedId)) selectedId = null;
   renderAll();
@@ -75,7 +82,7 @@ function loadDoc(d, { keepHistory = false } = {}) {
 // Dokument do udostępnienia: bez identyfikatorów, liczby zaokrąglone
 function exportDoc() {
   return {
-    v: 1, plan: PLAN.id, demo: doc.demo,
+    v: 1, plan: PLAN.id, demo: doc.demo, style: doc.style,
     items: doc.items.map(({ id, ...rest }) => ({ ...rest, x: r1(rest.x), y: r1(rest.y) })),
   };
 }
@@ -87,7 +94,7 @@ function commit() {
   if (undoStack.length > 200) undoStack.shift();
   redoStack.length = 0;
   lastSnap = snap;
-  store.saveCurrent(doc);
+  if (!shotMode) store.saveCurrent(doc);
   updateUndoButtons();
 }
 
@@ -328,6 +335,7 @@ function renderStructure() {
       `<text class="room-area" x="0" y="24">${r.area.toFixed(2).replace('.', ',')} m²</text></g>`;
   }
   L.labels.innerHTML = lab;
+  sync3d();
 }
 
 function renderDims() {
@@ -369,6 +377,7 @@ function renderItems() {
     g.innerHTML = inner;
     L.items[layerOf(it)].appendChild(g);
   }
+  sync3d();
 }
 
 function updateItemNode(it) {
@@ -441,6 +450,7 @@ function select(id) {
   if (id) { const g = svg.querySelector(`.item[data-id="${id}"]`); if (g) g.classList.add('selected'); }
   renderSelection();
   renderPanel();
+  if (view3d) view3d.setSelected(id);
 }
 
 function makeItem(key, x, y) {
@@ -542,6 +552,10 @@ function renderPanel() {
     `<label class="field"><span>Głębokość</span><div class="unit"><input id="prop-d" type="number" min="1" step="1" value="${r1(it.d)}"><i>cm</i></div></label>` +
     `<label class="field"><span>Środek X</span><div class="unit"><input id="prop-x" type="number" step="1" value="${r1(it.x)}"><i>cm</i></div></label>` +
     `<label class="field"><span>Środek Y</span><div class="unit"><input id="prop-y" type="number" step="1" value="${r1(it.y)}"><i>cm</i></div></label>` +
+    `<label class="field"><span>Wysokość (3D)</span><div class="unit"><input id="prop-h" type="number" min="1" step="1" value="${r1(heightOf(it, def))}"><i>cm</i></div></label>` +
+    ((def.layer ?? 1) === 2
+      ? `<label class="field"><span>Montaż od podłogi</span><div class="unit"><input id="prop-e" type="number" min="0" step="1" value="${r1(elevationOf(it, def))}"><i>cm</i></div></label>`
+      : '') +
     `</div>`;
   h += `<label class="field"><span>Obrót</span><div class="rot-row">` +
     `<button class="btn" data-rot="-90" title="Shift+R">⟲ 90°</button>` +
@@ -571,6 +585,8 @@ function renderPanel() {
   num('#prop-x', (v) => { it.x = v; });
   num('#prop-y', (v) => { it.y = v; });
   num('#prop-r', (v) => { it.r = norm360(v); });
+  num('#prop-h', (v) => { it.h = Math.max(1, v); });
+  if ($('#prop-e')) num('#prop-e', (v) => { it.e = Math.max(0, v); });
   if (def.variants) $('#prop-variant').addEventListener('change', (e) => {
     if (e.target.value === '') return;
     const i = +e.target.value, v = def.variants[i];
@@ -589,7 +605,7 @@ function renderPanel() {
     renderItems(); renderSelection(); commit();
   };
   $('#prop-color').addEventListener('input', (e) => { it.c = e.target.value; updateColor(it); });
-  $('#prop-color').addEventListener('change', () => commit());
+  $('#prop-color').addEventListener('change', () => { renderItems(); commit(); });
   $('#prop-color-reset').onclick = () => { delete it.c; renderItems(); renderPanel(); commit(); };
   $('#prop-dup').onclick = duplicateSelected;
   $('#prop-del').onclick = removeSelected;
@@ -608,6 +624,7 @@ function renderPanelApartment() {
   h += `<tr class="sum"><td></td><td>Pow. mieszkania</td><td class="a">${PLAN.area.toFixed(2).replace('.', ',')} m²</td></tr>`;
   h += `<tr><td></td><td>Balkon</td><td class="a">${PLAN.balcony.area.toFixed(2).replace('.', ',')} m²</td></tr></table>`;
 
+  h += finishHtml();
   h += `<h3>Ściany działowe do wyburzenia</h3>`;
   for (const p of PLAN.partitions) {
     h += `<label class="check"><input type="checkbox" data-demo="${p.id}"${doc.demo.includes(p.id) ? ' checked' : ''}> ${esc(p.name)}</label>`;
@@ -635,6 +652,84 @@ function renderPanelApartment() {
     renderStructure(); renderItems(); renderPanel(); commit();
   };
   for (const li of panel.querySelectorAll('[data-select]')) li.onclick = () => select(+li.dataset.select);
+  bindFinish();
+}
+
+// ---------------------------------------------------------------- wykończenie (kolory ścian, posadzki…)
+
+let finishRoom = '1';
+const SIDES = [['', 'brak'], ['n', 'północna ↑'], ['s', 'południowa ↓'], ['w', 'zachodnia ←'], ['e', 'wschodnia →']];
+
+function swatches(list, current, attr) {
+  let h = `<div class="swatches">`;
+  for (const c of list) h += `<button class="swatch${c.hex === current ? ' on' : ''}" style="--c:${c.hex}" ${attr}="${c.hex}" title="${esc(c.name)}"></button>`;
+  const custom = !list.some((c) => c.hex === current);
+  h += `<label class="swatch custom${custom ? ' on' : ''}" title="Własny kolor" style="--c:${custom ? current : '#ffffff'}"><input type="color" ${attr}-custom value="${current}"></label></div>`;
+  return h;
+}
+
+function finishHtml() {
+  const st = doc.style;
+  const room = PLAN.rooms.find((r) => String(r.n) === finishRoom);
+  let h = `<h3>Wykończenie</h3><div class="room-tabs">`;
+  for (const r of PLAN.rooms) h += `<button class="${String(r.n) === finishRoom ? 'on' : ''}" data-froom="${r.n}">${esc(r.short)}</button>`;
+  h += `</div>`;
+  h += `<div class="finish-label">Ściany · <b>${esc(paletteName(st.walls[finishRoom]))}</b></div>`;
+  h += swatches(WALL_PALETTE, st.walls[finishRoom], 'data-wall');
+  h += `<label class="field"><span>Posadzka</span><select data-floor>` +
+    Object.entries(FLOORS).map(([k, f]) => `<option value="${k}"${st.floors[finishRoom] === k ? ' selected' : ''}>${esc(f.name)}</option>`).join('') + `</select></label>`;
+  const acc = st.accent && st.accent.room === finishRoom ? st.accent : null;
+  h += `<div class="field"><span>Ściana akcentowa w: ${esc(room.short)}</span><div class="accent-row"><select data-accent-side>` +
+    SIDES.map(([k, l]) => `<option value="${k}"${(acc ? acc.side : '') === k ? ' selected' : ''}>${l}</option>`).join('') +
+    `</select><input type="color" data-accent-color value="${acc ? acc.color : '#2f4f40'}"${acc ? '' : ' disabled'}></div></div>`;
+  h += `<button class="link-btn" data-walls-all>Ten kolor ścian we wszystkich pomieszczeniach</button>`;
+  h += `<div class="finish-label">Fronty kuchenne · <b>${esc(paletteName(st.kitchenFront))}</b></div>`;
+  h += swatches(FRONTS, st.kitchenFront, 'data-front');
+  h += `<div class="grid2">` +
+    `<label class="field"><span>Blat</span><select data-counter>${Object.entries(COUNTERS).map(([k, c]) => `<option value="${k}"${st.counter === k ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>` +
+    `<label class="field"><span>Ramy okien</span><select data-frames>${Object.entries(FRAMES).map(([k, c]) => `<option value="${k}"${st.frames === k ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>` +
+    `</div>`;
+  h += `<label class="field"><span>Posadzka balkonu</span><select data-balcony>` +
+    Object.entries(FLOORS).map(([k, f]) => `<option value="${k}"${st.balcony === k ? ' selected' : ''}>${esc(f.name)}</option>`).join('') + `</select></label>`;
+  return h;
+}
+
+function setStyle(fn) {
+  fn(doc.style);
+  sync3d();
+  renderPanel();
+  commit();
+}
+
+function bindFinish() {
+  const p = panel;
+  for (const b of p.querySelectorAll('[data-froom]')) b.onclick = () => { finishRoom = b.dataset.froom; renderPanel(); };
+  for (const b of p.querySelectorAll('[data-wall]')) b.onclick = () => setStyle((st) => { st.walls[finishRoom] = b.dataset.wall; });
+  const wc = p.querySelector('[data-wall-custom]');
+  if (wc) {
+    wc.addEventListener('input', () => { doc.style.walls[finishRoom] = wc.value; wc.parentElement.style.setProperty('--c', wc.value); sync3d(); });
+    wc.addEventListener('change', () => setStyle(() => {}));
+  }
+  for (const b of p.querySelectorAll('[data-front]')) b.onclick = () => setStyle((st) => { st.kitchenFront = b.dataset.front; });
+  const fc = p.querySelector('[data-front-custom]');
+  if (fc) {
+    fc.addEventListener('input', () => { doc.style.kitchenFront = fc.value; fc.parentElement.style.setProperty('--c', fc.value); sync3d(); });
+    fc.addEventListener('change', () => setStyle(() => {}));
+  }
+  const sel = (q, fn) => { const el = p.querySelector(q); if (el) el.onchange = () => setStyle((st) => fn(st, el.value)); };
+  sel('[data-floor]', (st, v) => { st.floors[finishRoom] = v; });
+  sel('[data-counter]', (st, v) => { st.counter = v; });
+  sel('[data-frames]', (st, v) => { st.frames = v; });
+  sel('[data-balcony]', (st, v) => { st.balcony = v; });
+  const side = p.querySelector('[data-accent-side]'), acol = p.querySelector('[data-accent-color]');
+  side.onchange = () => setStyle((st) => {
+    if (!side.value) { if (st.accent && st.accent.room === finishRoom) delete st.accent; return; }
+    st.accent = { room: finishRoom, side: side.value, color: acol.value };
+  });
+  acol.addEventListener('input', () => { if (doc.style.accent) { doc.style.accent.color = acol.value; sync3d(); } });
+  acol.addEventListener('change', () => setStyle(() => {}));
+  const all = p.querySelector('[data-walls-all]');
+  if (all) all.onclick = () => setStyle((st) => { for (const k of Object.keys(st.walls)) st.walls[k] = st.walls[finishRoom]; });
 }
 
 // ---------------------------------------------------------------- katalog
@@ -971,6 +1066,7 @@ function replaceDoc(d) {
     v: 1, plan: PLAN.id,
     items: (d.items || []).map((i) => normalizeItem({ ...i, id: undefined })),
     demo: Array.isArray(d.demo) ? d.demo.filter((id) => PLAN.partitions.some((p) => p.id === id)) : [],
+    style: normalizeStyle(d.style),
   };
   renderAll();
   commit();
@@ -1007,11 +1103,12 @@ async function loadFromHash() {
   try {
     const d = await decodeDoc(code);
     const prev = store.loadCurrent();
-    if (prev && prev.items && prev.items.length) {
+    if (!shotMode && prev && prev.items && prev.items.length) {
       const stamp = new Date().toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' });
       store.saveProject(`Kopia przed otwarciem linku ${stamp}`, prev);
     }
     loadDoc(d);
+    if (shotMode) return true;
     history.replaceState(null, '', window.location.pathname + window.location.search);
     toast('Wczytano projekt z linku (poprzedni układ zapisano w Projektach)');
     return true;
@@ -1024,10 +1121,87 @@ async function loadFromHash() {
 
 window.addEventListener('hashchange', () => { loadFromHash(); });
 
+// ---------------------------------------------------------------- widok 3D
+
+let view3d = null;
+let is3D = false;
+
+function sync3d() { if (view3d && is3D) view3d.setData(doc, doc.style); }
+
+async function setViewMode(m) {
+  is3D = m === '3d';
+  document.body.classList.toggle('mode-3d', is3D);
+  for (const b of document.querySelectorAll('[data-viewmode]')) b.classList.toggle('on', b.dataset.viewmode === m);
+  if (!shotMode) { settings.view = m; saveSettings(); }
+  if (!is3D) { if (view3d) view3d.stop(); return; }
+  if (!view3d) {
+    $('#loading3d').hidden = false;
+    try {
+      const { View3D } = await import('./view3d.js');
+      view3d = new View3D($('#stage3d'), {
+        onSelect: (id) => select(id),
+        onMove: (it, x, y, alt) => {
+          const p = alt ? { x: Math.round(x), y: Math.round(y) } : snapPosition(it, x, y);
+          it.x = p.x; it.y = p.y;
+          renderPanelPosition();
+        },
+        onCommit: () => { renderItems(); renderSelection(); renderPanel(); commit(); },
+      });
+      view3d.setOption('ao', settings.ao !== false);
+      view3d.setOption('cut', !shotMode && !!settings.cut);
+      const cam = hashParams.cam || settings.cam || 'top';
+      view3d.setCamera(cam, false);
+      $('#cam3d').value = view3d.cameraId;
+    } catch (err) {
+      console.error(err);
+      $('#loading3d').hidden = true;
+      toast('Nie udało się wczytać widoku 3D – sprawdź połączenie z internetem');
+      setViewMode('2d');
+      return;
+    }
+    $('#loading3d').hidden = true;
+  }
+  if (!is3D) return;
+  view3d.setData(doc, doc.style);
+  view3d.setSelected(selectedId);
+  view3d.resize();
+  view3d.start();
+}
+
+function setup3dToolbar() {
+  for (const b of document.querySelectorAll('[data-viewmode]')) b.onclick = () => setViewMode(b.dataset.viewmode);
+  const cam = $('#cam3d');
+  cam.innerHTML = PLAN.cameras.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  cam.onchange = () => { settings.cam = cam.value; saveSettings(); if (view3d) view3d.setCamera(cam.value); };
+  const cut = $('#opt3d-cut'), ao = $('#opt3d-ao');
+  cut.checked = !!settings.cut;
+  ao.checked = settings.ao !== false;
+  cut.onchange = () => { settings.cut = cut.checked; saveSettings(); if (view3d) view3d.setOption('cut', cut.checked); };
+  ao.onchange = () => { settings.ao = ao.checked; saveSettings(); if (view3d) view3d.setOption('ao', ao.checked); };
+  $('#btn-shot').onclick = () => {
+    if (!view3d) return;
+    const a = document.createElement('a');
+    a.href = view3d.snapshot(1920, 1080);
+    a.download = `wizualizacja-${PLAN.id}-${view3d.cameraId}.png`;
+    a.click();
+  };
+}
+
+// Dostęp dla skryptów (skill /wizualizacja) i debugowania w konsoli
+window.__hp = {
+  get doc() { return exportDoc(); },
+  get view3d() { return view3d; },
+  setViewMode,
+  snapshot: (w, h) => view3d && view3d.snapshot(w, h),
+  setCamera: (id) => view3d && view3d.setCamera(id, false),
+};
+
 // ---------------------------------------------------------------- start
 
 async function init() {
+  if (shotMode) document.body.classList.add('shot');
   setupToolbar();
+  setup3dToolbar();
   renderCatalog();
   const fromHash = await loadFromHash();
   if (!fromHash) {
@@ -1038,6 +1212,14 @@ async function init() {
   new ResizeObserver(() => { if (!svg.dataset.userZoomed) fitView(); }).observe(svg);
   svg.addEventListener('wheel', () => { svg.dataset.userZoomed = '1'; }, { once: true });
   svg.addEventListener('pointerdown', () => { svg.dataset.userZoomed = '1'; }, { once: true });
+  if (shotMode || hashParams.v === '3d' || settings.view === '3d') await setViewMode('3d');
+  if (shotMode) {
+    // tryb zrzutu: sygnał gotowości po kilku wyrenderowanych klatkach
+    const wait = () => new Promise((r) => requestAnimationFrame(r));
+    for (let i = 0; i < 6; i++) await wait();
+    document.title = 'READY';
+    window.__shotReady = true;
+  }
 }
 
 init();

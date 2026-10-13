@@ -55,21 +55,23 @@ export const PLAN = {
     { id: 'p2k', name: 'Pokój 2 ↔ aneks', rects: [[293, 529, 10, 337]] },
   ],
 
-  // Okna / drzwi balkonowe: prostokąt otworu w ścianie + podziały
+  // Okna / drzwi balkonowe: prostokąt otworu w ścianie + podziały; sill/head = wysokość parapetu i nadproża (3D)
   windows: [
-    { rect: [771, 158, 46, 109] },
-    { rect: [771, 479, 46, 109] },
-    { rect: [68, 866, 111, 45] },
-    { rect: [448, 866, 288, 45], mullions: [627], label: 'wyjście na balkon' },
+    { rect: [771, 158, 46, 109], sill: 85, head: 240 },
+    { rect: [771, 479, 46, 109], sill: 85, head: 240 },
+    { rect: [68, 866, 111, 45], sill: 85, head: 240 },
+    { rect: [448, 866, 288, 45], mullions: [627], sill: 0, head: 240, label: 'wyjście na balkon' },
   ],
 
   // Drzwi: zawias, promień, kąt skrzydła otwartego (open) i zamkniętego (closed) w stopniach (0 = +x, 90 = +y)
+  // gap = otwór w ścianie (3D: nadproże od wysokości drzwi do sufitu)
   doors: [
-    { id: 'd1', hinge: [0, 37], r: 90, open: 0, closed: 90, entry: true },
-    { id: 'd2', hinge: [172, 190], r: 78, open: 180, closed: 270 },
-    { id: 'd3', hinge: [72, 486], r: 82, open: 90, closed: 0 },
-    { id: 'd4', hinge: [439, 290], r: 80, open: 270, closed: 0 },
+    { id: 'd1', hinge: [0, 37], r: 90, open: 0, closed: 90, entry: true, gap: [-25, 37, 25, 93] },
+    { id: 'd2', hinge: [172, 190], r: 78, open: 180, closed: 270, gap: [172, 112, 12, 78] },
+    { id: 'd3', hinge: [72, 486], r: 82, open: 90, closed: 0, gap: [72, 478, 83, 8] },
+    { id: 'd4', hinge: [439, 290], r: 80, open: 270, closed: 0, gap: [439, 290, 81, 9] },
   ],
+  doorHeight: 205,
 
   balcony: {
     area: 25.70,
@@ -78,20 +80,33 @@ export const PLAN = {
     label: [70, 950],
   },
 
-  // Pomieszczenia: numer, nazwa, powierzchnia z karty lokalu, pozycja etykiety, obrys podłogi
+  // Pomieszczenia: numer, nazwa, powierzchnia z karty lokalu, pozycja etykiety, obrys podłogi (prostokąty)
   rooms: [
-    { n: 1, name: 'Pokój z aneksem kuchennym', area: 24.94, label: [610, 715] },
-    { n: 2, name: 'Pokój', area: 11.13, label: [146, 690] },
-    { n: 3, name: 'Pokój', area: 11.40, label: [575, 150] },
-    { n: 4, name: 'Łazienka', area: 5.77, label: [242, 160] },
-    { n: 5, name: 'Przedpokój', area: 10.69, label: [80, 175] },
+    { n: 1, name: 'Pokój z aneksem kuchennym', short: 'Salon z aneksem', area: 24.94, label: [610, 715],
+      floor: [[378, 299, 393, 177], [369, 476, 402, 53], [303, 529, 468, 337]] },
+    { n: 2, name: 'Pokój', short: 'Pokój 2', area: 11.13, label: [146, 690], floor: [[0, 486, 293, 380]] },
+    { n: 3, name: 'Pokój', short: 'Pokój 3', area: 11.40, label: [575, 150], floor: [[378, 0, 393, 290]] },
+    { n: 4, name: 'Łazienka', short: 'Łazienka', area: 5.77, label: [242, 160], floor: [[184, 0, 179, 342]] },
+    { n: 5, name: 'Przedpokój', short: 'Przedpokój', area: 10.69, label: [80, 175], floor: [[0, 0, 172, 478], [172, 351, 206, 125]] },
   ],
 
   // Cała podłoga lokalu (do wypełnienia tła)
   floor: [[0, 0, 771, 866]],
 
   // Obniżenie sufitu h = 2,49 m
-  soffit: { rect: [0, 299, 771, 50], label: 'h = 2,49 m' },
+  soffit: { rect: [0, 299, 771, 50], label: 'h = 2,49 m', height: 249 },
+
+  // Ujęcia kamery w 3D: pozycja [x, y, wysokość] i punkt, na który patrzy (cm)
+  cameras: [
+    { id: 'top', name: 'Widok z góry (makieta)', pos: [1250, 1450, 1350], target: [390, 430, 0], fov: 40 },
+    { id: 'salon_balcony', name: 'Salon i aneks – od balkonu', pos: [760, 850, 165], target: [330, 330, 100], fov: 72 },
+    { id: 'salon_entry', name: 'Salon – od przedpokoju', pos: [330, 420, 160], target: [760, 760, 100], fov: 72 },
+    { id: 'kitchen', name: 'Aneks kuchenny', pos: [650, 810, 160], target: [320, 620, 100], fov: 68 },
+    { id: 'room2', name: 'Pokój 2', pos: [275, 505, 160], target: [40, 830, 100], fov: 72 },
+    { id: 'room3', name: 'Pokój 3', pos: [480, 280, 160], target: [770, 60, 100], fov: 72 },
+    { id: 'bath', name: 'Łazienka', pos: [190, 330, 160], target: [330, 40, 85], fov: 78 },
+    { id: 'hall', name: 'Przedpokój', pos: [150, 470, 160], target: [20, 40, 110], fov: 72 },
+  ],
 
   // Wymiary opisane na rzucie: [x1, y1, x2, y2, etykieta]
   dims: [
@@ -125,7 +140,7 @@ export const DEFAULT_ITEMS = [
   { t: 'k_base', x: 333, y: 659, r: 270, w: 60, d: 60 },
   { t: 'k_sink', x: 333, y: 729, r: 270, w: 80, d: 60 },
   { t: 'k_dishwasher', x: 333, y: 799, r: 270, w: 60, d: 60 },
-  { t: 'k_base', x: 333, y: 846, r: 270, w: 30, d: 60 },
+  { t: 'k_base', x: 333, y: 844, r: 270, w: 30, d: 60 },
   { t: 'bath', x: 288, y: 306, r: 180, w: 150, d: 70 },
   { t: 'wc', x: 242, y: 28, r: 0, w: 38, d: 55 },
   { t: 'washer', x: 333, y: 67, r: 90, w: 60, d: 60 },

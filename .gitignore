@@ -1,2 +1,5 @@
 document.pdf
 .claude/settings.local.json
+renders/
+tools/config.local.json
+__pycache__/

@@ -7,6 +7,14 @@
   <meta name="description" content="Interaktywny planer umeblowania mieszkania LM25 – przeciągnij meble na wierny rzut 1:100, zapisz układ i udostępnij linkiem.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='3' width='26' height='26' fill='none' stroke='%23222' stroke-width='4'/%3E%3Crect x='14' y='5' width='3' height='12' fill='%23e8706f'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
 </head>
 <body>
   <header class="topbar">
@@ -15,18 +23,22 @@
       <div><b>Planer mieszkania</b><span>LM25 · 63,93 m² + balkon 25,70 m²</span></div>
     </div>
     <div class="tools">
+      <div class="viewmode" role="group" aria-label="Tryb widoku">
+        <button data-viewmode="2d" class="on">2D</button>
+        <button data-viewmode="3d">3D</button>
+      </div>
       <div class="group">
         <button class="btn" id="btn-undo" title="Cofnij (Ctrl+Z)" disabled>↶<span class="hide-sm"> Cofnij</span></button>
         <button class="btn" id="btn-redo" title="Ponów (Ctrl+Y)" disabled>↷<span class="hide-sm"> Ponów</span></button>
       </div>
-      <div class="group">
+      <div class="group only-2d">
         <button class="btn" id="btn-zoom-out" title="Oddal (−)">−</button>
         <span id="zoom-label" class="zoom-label">100%</span>
         <button class="btn" id="btn-zoom-in" title="Przybliż (+)">+</button>
         <button class="btn" id="btn-fit" title="Dopasuj (F)">Dopasuj</button>
         <button class="btn" id="btn-measure" title="Miarka (M)">📏<span class="hide-sm"> Miarka</span></button>
       </div>
-      <details class="dropdown">
+      <details class="dropdown only-2d">
         <summary class="btn">Widok ▾</summary>
         <div class="dropdown-body">
           <label class="check"><input type="checkbox" id="opt-dims"> Wymiary z rzutu</label>
@@ -73,6 +85,14 @@
           <g id="l-measure"></g>
         </g>
       </svg>
+      <div id="stage3d" class="stage3d"></div>
+      <div class="toolbar3d">
+        <select id="cam3d" aria-label="Ujęcie kamery"></select>
+        <label class="check"><input type="checkbox" id="opt3d-cut"> Przekrój (ściany do 110 cm)</label>
+        <label class="check"><input type="checkbox" id="opt3d-ao"> Cienie kontaktowe</label>
+        <button class="btn" id="btn-shot">Zapisz obraz PNG</button>
+      </div>
+      <div id="loading3d" class="loading3d" hidden>Wczytywanie widoku 3D…</div>
       <div class="statusbar">
         <span id="cursor-pos">x 0 · y 0 cm</span>
         <span class="hide-sm">Skala rzutu 1:100 · wymiary w świetle ścian (cm)</span>
