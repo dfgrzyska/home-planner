@@ -133,6 +133,37 @@ export function mirrorOutline(shape, w, h, n = 96) {
   return pts.map(([x, y]) => [((x - x0) / (x1 - x0) - 0.5) * w, ((y - y0) / (y1 - y0)) * h]);
 }
 
+// Normalne zewnętrzne obrysu (obrys przeciwny do ruchu wskazówek zegara) i obrys przesunięty na zewnątrz o dist cm
+export function outlineNormals(pts) {
+  const n = pts.length;
+  return pts.map((_, i) => {
+    const [ax, ay] = pts[(i - 1 + n) % n], [bx, by] = pts[(i + 1) % n];
+    const tx = bx - ax, ty = by - ay, l = Math.hypot(tx, ty) || 1;
+    return [ty / l, -tx / l];
+  });
+}
+export function offsetOutline(pts, dist) {
+  const nn = outlineNormals(pts);
+  return pts.map(([x, y], i) => [x + nn[i][0] * dist, y + nn[i][1] * dist]);
+}
+
+// Punkty co równy kawałek obwodu: [x, y, tx, ty, nx, ny] (położenie, styczna, normalna zewnętrzna)
+export function outlineSamples(pts, count) {
+  const n = pts.length, seg = [];
+  let total = 0;
+  for (let i = 0; i < n; i++) { const [ax, ay] = pts[i], [bx, by] = pts[(i + 1) % n]; const l = Math.hypot(bx - ax, by - ay); seg.push(l); total += l; }
+  const out = [];
+  for (let k = 0; k < count; k++) {
+    let d = ((k + 0.5) / count) * total, i = 0;
+    while (d > seg[i] && i < n - 1) { d -= seg[i]; i++; }
+    const [ax, ay] = pts[i], [bx, by] = pts[(i + 1) % n];
+    const t = seg[i] ? d / seg[i] : 0, l = seg[i] || 1;
+    const tx = (bx - ax) / l, ty = (by - ay) / l;
+    out.push([ax + (bx - ax) * t, ay + (by - ay) * t, tx, ty, ty, -tx]);
+  }
+  return { samples: out, perimeter: total };
+}
+
 // Miniatura lustra w katalogu – widok z przodu
 export function mirrorThumb(def) {
   const v = def.variants[def.defaultVariant ?? 0];

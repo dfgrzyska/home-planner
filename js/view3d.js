@@ -11,6 +11,7 @@ import { PLAN } from './plan.js';
 import { CATALOG_BY_KEY } from './catalog.js';
 import { FLOORS, COUNTERS, FRAMES, WALL_TILES } from './style.js';
 import { floorCanvas, wallTileCanvas } from './textures.js';
+import { offsetOutline } from './shapes.js';
 import { buildFurniture, elevationOf, heightOf, mat } from './furniture3d.js';
 import { doorOptions, doorGeometry, dirOf, isClosed, DOOR_FINISHES } from './doors.js';
 
@@ -36,6 +37,31 @@ export const TIMES = {
 
 const glowTexCache = new Map();
 // Tekstura poświaty: kolor przechodzi z color w color2 wzdłuż x; shape: box (aureola), up / down (zanik w pionie)
+function outlineGlowTexture(L) {
+  const key = ['outline', L.outlineKey, L.color].join('|');
+  if (glowTexCache.has(key)) return glowTexCache.get(key);
+  const S = 256, [sw, sh] = L.size;
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  const ctx = c.getContext('2d');
+  const toPx = ([x, y]) => [((x + sw / 2) / sw) * S, ((sh / 2 - y) / sh) * S];
+  // nałożone obrysy coraz dalej od krawędzi lustra – jasno przy krawędzi, miękki zanik na zewnątrz
+  const steps = 18, maxD = 32; // margines poświaty: płaszczyzna jest o 35 cm większa z każdej strony
+  ctx.fillStyle = L.color;
+  for (let k = steps; k >= 0; k--) {
+    const pts = offsetOutline(L.outline, (k / steps) * maxD);
+    ctx.globalAlpha = 0.11 * Math.pow(1 - k / steps, 0.6);
+    ctx.beginPath();
+    pts.forEach((p, i) => { const [px, py] = toPx(p); if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py); });
+    ctx.closePath();
+    ctx.fill();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  glowTexCache.set(key, tex);
+  return tex;
+}
+
 function glowTexture(shape, color, color2, vertical) {
   const key = [shape, color, color2, vertical].join('|');
   if (glowTexCache.has(key)) return glowTexCache.get(key);
@@ -617,7 +643,14 @@ export class View3D {
         const len = L.len * M, thick = (L.thick || 2) * M;
         const l = new THREE.RectAreaLight(color, (L.lm / (len * thick * Math.PI)) * LIGHT_K * (L.k ?? 1), L.vertical ? thick : len, L.vertical ? len : thick);
         l.position.set(...L.pos);
-        l.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), new THREE.Vector3(...L.normal).normalize());
+        const nrm = new THREE.Vector3(...L.normal).normalize();
+        if (L.tangent) {
+          // lokalne -Z = kierunek świecenia, lokalne X = wzdłuż taśmy
+          const zAxis = nrm.clone().negate();
+          const xAxis = new THREE.Vector3(...L.tangent).projectOnPlane(zAxis).normalize();
+          const yAxis = new THREE.Vector3().crossVectors(zAxis, xAxis);
+          l.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis));
+        } else l.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), nrm);
         l.userData.lm = 0; // bez cieni
         made.push(l);
       } else if (L.kind === 'spot') {
@@ -642,7 +675,8 @@ export class View3D {
         if (dist === null) continue;
         while (dist > 0 && hit(dist - 0.1)) dist -= 0.1; // dokładne lico ściany (krok 1 mm)
         const [sw, sh] = L.size;
-        const m = new THREE.MeshBasicMaterial({ map: glowTexture(L.shape, L.color, L.color2, L.vertical), transparent: true, depthWrite: false,
+        const map = L.shape === 'outline' ? outlineGlowTexture(L) : glowTexture(L.shape, L.color, L.color2, L.vertical);
+        const m = new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false,
           blending: THREE.AdditiveBlending, opacity: TIMES[this.tod].glow * Math.min(0.75, 0.25 + L.lm / 4000), toneMapped: false });
         m.userData.glowBase = Math.min(0.75, 0.25 + L.lm / 4000);
         const plane = new THREE.Mesh(new THREE.PlaneGeometry(sw, sh), m);

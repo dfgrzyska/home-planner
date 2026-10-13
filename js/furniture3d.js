@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { heightOf, elevationOf } from './dims3d.js';
 import { lightOf } from './lights.js';
-import { slatSpec, mirrorOutline } from './shapes.js';
+import { slatSpec, mirrorOutline, offsetOutline, outlineSamples } from './shapes.js';
 export { heightOf, elevationOf } from './dims3d.js';
 
 // ---------------------------------------------------------------- światło
@@ -526,7 +526,7 @@ export function buildFurniture(it, def, style) {
       box(g, w, 12, d, 0, 83, 0, ceramic());
       box(g, w * 0.6, 0.5, d * 0.55, 0, 95, 2, mat('#e6eced', { rough: 0.15 }));
       cyl(g, 1.4, 16, 0, 95, -hd + 6, metal(C.steel));
-      box(g, w * 0.92, 70, 1.5, 0, 112, -hd + 0.8, mat('#dfe8ec', { rough: 0.03, metal: 0.95 }));
+      // bez lustra – lustro to osobny element (kategoria Łazienka)
       break;
     }
     case 'wc': {
@@ -700,17 +700,22 @@ export function buildFurniture(it, def, style) {
       g.add(mesh);
       const L = lightOf(it, def);
       if (L && L.on) {
-        // pasek LED za lustrem świeci na ścianę: odcinki wzdłuż krawędzi obrysu (prostokąt otaczający)
-        const z = -hd + 0.3, s2 = Math.SQRT1_2;
-        const edge = (pos, normal, len, vertical) => addLight(g, { kind: 'rect', pos, normal, len, thick: 1.5, vertical, color: L.color, lm: L.lm / 4, k: 0.7 });
-        edge([0, H - 4, z], [0, s2, -s2], w * 0.7, false);
-        edge([0, 4, z], [0, -s2, -s2], w * 0.7, false);
-        edge([-hw + 4, H / 2, z], [-s2, 0, -s2], H * 0.7, true);
-        edge([hw - 4, H / 2, z], [s2, 0, -s2], H * 0.7, true);
-        addLight(g, { kind: 'glow', pos: [0, H / 2, -hd], dir: [0, 0, -1], size: [w + 45, H + 45], shape: 'box', color: L.color, color2: L.color, lm: L.lm });
-        // świecąca krawędź widoczna przy ścianie
-        const rim = new THREE.Mesh(new THREE.ExtrudeGeometry(shp, { depth: 0.4, bevelEnabled: false, curveSegments: 1 }), glowMat(L.color, true, 1.2));
-        rim.scale.set(1.02, 1.02, 1); rim.position.set(0, -H * 0.01, -hd + 0.1);
+        // taśma LED za lustrem biegnie wzdłuż obrysu: odcinki świecą skośnie na zewnątrz i na ścianę
+        const inset = offsetOutline(pts, -3);
+        const { samples, perimeter } = outlineSamples(inset, 12);
+        const segLen = (perimeter / 12) * 0.9;
+        for (const [x, y, tx, ty, nx, ny] of samples) {
+          addLight(g, { kind: 'rect', pos: [x, y, -hd + 0.3], normal: [nx * 0.6, ny * 0.6, -0.8], tangent: [tx, ty, 0],
+            len: segLen, thick: 1.5, color: L.color, lm: L.lm / 12, k: 0.7 });
+        }
+        // poświata na ścianie w kształcie lustra (aureola o stałej szerokości)
+        addLight(g, { kind: 'glow', pos: [0, H / 2, -hd], dir: [0, 0, -1], size: [w + 70, H + 70], shape: 'outline',
+          outline: pts.map(([x, y]) => [x, y - H / 2]), outlineKey: `${def.shape}|${w}|${H}`, color: L.color, color2: L.color, lm: L.lm });
+        // świecąca krawędź: cienki pierścień tuż za obrysem lustra
+        const ring = new THREE.Shape(offsetOutline(pts, 0.9).map(([x, y]) => new THREE.Vector2(x, y)));
+        ring.holes.push(new THREE.Path(offsetOutline(pts, -0.5).map(([x, y]) => new THREE.Vector2(x, y))));
+        const rim = new THREE.Mesh(new THREE.ShapeGeometry(ring), glowMat(L.color, true, 1.3));
+        rim.position.z = -hd + 0.4;
         g.add(rim);
       }
       break;
