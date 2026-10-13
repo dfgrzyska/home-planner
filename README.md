@@ -1,5 +1,7 @@
 # Planer mieszkania – LM25
 
+**Wersja online:** https://dfgrzyska.github.io/home-planner/
+
 Interaktywny planer umeblowania mieszkania LM25 (budynek I, Osiedle Dębowy Park) działający w przeglądarce.
 Rzut jest odwzorowany wektorowo w skali 1:1 w centymetrach na podstawie rzutu 1:100 dewelopera –
 ściany, okna, drzwi, szachty, ściany do wyburzenia i balkon zgadzają się z wymiarami z karty lokalu.
