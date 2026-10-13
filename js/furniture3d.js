@@ -390,8 +390,13 @@ export function buildFurniture(it, def, style) {
       if (L && L.on) {
         const n = 6;
         for (let i = 0; i < n; i++) box(g, (w - 10) / n, 1, 0.4, -hw + 5 + ((w - 10) / n) * (i + 0.5), sh - 3, -2.2, glowMat(lerpHex(L.color, L.color2, i / (n - 1)), true, 2));
-        // świecący prostokąt za ekranem skierowany na ścianę – aureola wokół telewizora
-        wallRun(g, L, w - 12, false, [0, sh / 2, -hd - 0.5], 0.5, sh - 12);
+        // taśma na obwodzie tylnej ścianki: diody skierowane skośnie na zewnątrz, więc aureola wychodzi poza obrys TV
+        const z = -hd - 0.5, s2 = Math.SQRT1_2;
+        const edge = (pos, normal, len, vertical, color) => addLight(g, { kind: 'rect', pos, normal, len, thick: 2, vertical, color, lm: L.lm / 4, k: 0.9 });
+        edge([0, sh - 6, z], [0, s2, -s2], w - 16, false, lerpHex(L.color, L.color2, 0.5));
+        edge([0, 6, z], [0, -s2, -s2], w - 16, false, lerpHex(L.color, L.color2, 0.5));
+        edge([-hw + 6, sh / 2, z], [-s2, 0, -s2], sh - 16, true, L.color);
+        edge([hw - 6, sh / 2, z], [s2, 0, -s2], sh - 16, true, L.color2);
         addLight(g, { kind: 'glow', pos: [0, sh / 2, -hd], dir: [0, 0, -1], size: [w + 90, sh + 80], shape: 'box', color: L.color, color2: L.color2, lm: L.lm });
       }
       break;

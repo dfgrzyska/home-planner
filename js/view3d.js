@@ -11,7 +11,7 @@ import { PLAN } from './plan.js';
 import { CATALOG_BY_KEY } from './catalog.js';
 import { FLOORS, COUNTERS, FRAMES } from './style.js';
 import { floorCanvas } from './textures.js';
-import { buildFurniture, elevationOf, mat } from './furniture3d.js';
+import { buildFurniture, elevationOf, heightOf, mat } from './furniture3d.js';
 import { doorOptions, doorGeometry, dirOf, isClosed, DOOR_FINISHES } from './doors.js';
 
 const M = 0.01;
@@ -256,6 +256,21 @@ function floorMesh(rects, key, elev, aniso) {
   const m = new THREE.Mesh(geo, material);
   m.receiveShadow = true;
   return m;
+}
+
+// Płaskie powierzchnie mebli, na których może wylądować poświata (rzut AABB + zakres wysokości)
+const SURFACE_KINDS = ['slats', 'slat_partition', 'wardrobe', 'shelf', 'cabinet', 'k_wall', 'k_oven', 'k_fridge'];
+function surfacesOf(items) {
+  const out = [];
+  for (const it of items) {
+    const def = CATALOG_BY_KEY[it.t];
+    if (!def || !SURFACE_KINDS.includes(def.kind)) continue;
+    const a = (it.r * Math.PI) / 180, c = Math.abs(Math.cos(a)), s = Math.abs(Math.sin(a));
+    const hw = (it.w * c + it.d * s) / 2, hd = (it.w * s + it.d * c) / 2;
+    const y0 = elevationOf(it, def);
+    out.push({ id: it.id, rect: [it.x - hw, it.y - hd, 2 * hw, 2 * hd], y0, y1: y0 + heightOf(it, def) });
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- widok
@@ -564,7 +579,7 @@ export class View3D {
         const len = L.len * M, thick = (L.thick || 2) * M;
         const l = new THREE.RectAreaLight(color, (L.lm / (len * thick * Math.PI)) * LIGHT_K * (L.k ?? 1), L.vertical ? thick : len, L.vertical ? len : thick);
         l.position.set(...L.pos);
-        l.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), new THREE.Vector3(...L.normal));
+        l.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), new THREE.Vector3(...L.normal).normalize());
         l.userData.lm = 0; // bez cieni
         made.push(l);
       } else if (L.kind === 'spot') {
@@ -582,7 +597,8 @@ export class View3D {
         const px = it.x + lx * Math.cos(rad) + lz * Math.sin(rad), py = it.y - lx * Math.sin(rad) + lz * Math.cos(rad);
         const dx = -Math.sin(rad), dy = -Math.cos(rad); // kierunek -z lokalnego w rzucie
         const h = elevationOf(it, CATALOG_BY_KEY[it.t]) + ly;
-        const hit = (t) => (this.solids || []).some((s) => h >= s.y0 && h <= s.y1 && inRect(s.rect, px + dx * t, py + dy * t));
+        const surf = [...(this.solids || []), ...(this.surfaces || []).filter((s) => s.id !== it.id)];
+        const hit = (t) => surf.some((s) => h >= s.y0 && h <= s.y1 && inRect(s.rect, px + dx * t, py + dy * t));
         let dist = null;
         for (let t = 0; t <= 120 && dist === null; t += 1) if (hit(t)) dist = t;
         if (dist === null) continue;
@@ -638,6 +654,7 @@ export class View3D {
     this.glowMats = new Set();
     const st = { kitchenFront: style.kitchenFront, counterHex: COUNTERS[style.counter].hex, counterWood: !!COUNTERS[style.counter].wood };
     this.nodes = new Map();
+    this.surfaces = surfacesOf(doc.items);
     for (const it of doc.items) {
       const def = CATALOG_BY_KEY[it.t] || CATALOG_BY_KEY.custom;
       const inner = buildFurniture(it, def, st);
@@ -663,12 +680,17 @@ export class View3D {
     const g = this.nodes && this.nodes.get(it.id);
     if (!g) return;
     this.placeNode(g, it);
-    const inner = g.children[0];
-    if (inner && inner.userData.lights && inner.userData.lights.some((L) => L.kind === 'glow')) {
+    // przesunięcie mebla może zmienić miejsce poświaty jego świateł albo świateł przed nim (np. TV przed lamelami)
+    this.surfaces = surfacesOf(this.doc.items);
+    let relit = false;
+    for (const other of this.doc.items) {
+      const inner = this.nodes.get(other.id) && this.nodes.get(other.id).children[0];
+      if (!inner || !inner.userData.lights || !inner.userData.lights.some((L) => L.kind === 'glow')) continue;
       this.lights = this.lights.filter((l) => l.parent !== inner);
-      this.attachLights(it, inner);
-      this.assignShadows();
+      this.attachLights(other, inner);
+      relit = true;
     }
+    if (relit) this.assignShadows();
     this.updateSelection();
     this.shadowDirty = true;
     this.dirty = true;
