@@ -2,10 +2,10 @@ import { PLAN, DEFAULT_ITEMS } from './plan.js';
 import { CATALOG, CATALOG_BY_KEY, CATEGORIES } from './catalog.js';
 import { drawShape, slatThumb, mirrorThumb } from './shapes.js';
 import { store, encodeDoc, decodeDoc, buildShareUrl, readHashCode, readHashParams } from './storage.js';
-import { normalizeStyle, WALL_PALETTE, FLOORS, FRONTS, COUNTERS, FRAMES, WALL_TILES, TILE_HEIGHTS, paletteName } from './style.js';
+import { normalizeStyle, WALL_PALETTE, FLOORS, FRONTS, COUNTERS, FRAMES, WALL_TILES, TILE_HEIGHTS, WALL_SIDES, sideStyle, paletteName } from './style.js';
 import { heightOf, elevationOf } from './dims3d.js';
 import { HUE_COLORS, LIGHT_DIRS, lightOf } from './lights.js';
-import { DOOR_TYPES, DOOR_FINISHES, DOOR_NAMES, doorOptions, normalizeDoors, doorGeometry, dirOf, isClosed } from './doors.js';
+import { DOOR_TYPES, DOOR_FINISHES, DOOR_NAMES, doorOptions, normalizeDoors, doorGeometry, dirOf, isClosed, wallLayout, doorDistances, shiftRange } from './doors.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const $ = (sel, el = document) => el.querySelector(sel);
@@ -160,8 +160,9 @@ function polysOverlap(A, B, eps = 0.5) {
 }
 
 function structureRects() {
-  const out = [...PLAN.walls, ...PLAN.bathWalls, ...PLAN.context, ...PLAN.windows.map((w) => w.rect), ...PLAN.balcony.railing];
-  for (const p of PLAN.partitions) if (!doc.demo.includes(p.id)) out.push(...p.rects);
+  const lay = wallLayout(doc);
+  const out = [...PLAN.walls, ...lay.bathWalls, ...PLAN.context, ...PLAN.windows.map((w) => w.rect), ...PLAN.balcony.railing];
+  for (const p of PLAN.partitions) out.push(...lay.partitions[p.id]);
   return out;
 }
 
@@ -170,8 +171,11 @@ function clashesOf(it, rects = structureRects()) {
   if (lay === 0 || lay === 3) return null; // dywany, lamele, paski LED i elementy sufitowe nie kolidują
   const P = corners(it);
   for (const r of rects) if (polysOverlap(P, rectPts(r))) return 'ściana';
+  const vr = (x) => { const dx = defOf(x), e = elevationOf(x, dx); return [e, e + heightOf(x, dx)]; };
+  const [a0, a1] = vr(it);
   for (const o of doc.items) {
     if (o === it || layerOf(o) !== lay) continue;
+    if (lay === 2) { const [b0, b1] = vr(o); if (a1 <= b0 + 0.5 || b1 <= a0 + 0.5) continue; } // np. monitor nad komputerem
     if (polysOverlap(P, corners(o))) return defOf(o).name;
   }
   return null;
@@ -287,10 +291,11 @@ function renderStructure() {
 
   for (const r of PLAN.context) s += svgRect(r, 'ctx');
   for (const r of PLAN.balcony.railing) s += svgRect(r, 'railing');
-  for (const r of PLAN.bathWalls) s += svgRect(r, 'bathwall');
+  const lay = wallLayout(doc);
+  for (const r of lay.bathWalls) s += svgRect(r, 'bathwall');
   for (const p of PLAN.partitions) {
     const demo = doc.demo.includes(p.id);
-    for (const r of p.rects) s += svgRect(r, demo ? 'partition demolished' : 'partition', `data-partition="${p.id}"`);
+    for (const r of demo ? p.rects : lay.partitions[p.id]) s += svgRect(r, demo ? 'partition demolished' : 'partition', `data-partition="${p.id}"`);
   }
   for (const r of PLAN.walls) s += svgRect(r, 'wall');
 
@@ -622,6 +627,11 @@ function renderPanel() {
     h += `<label class="field"><span>Rozstaw lameli</span><select data-oselect="pattern">` +
       def.patterns.map((x) => `<option value="${x.id}"${x.id === cur ? ' selected' : ''}>${esc(x.name)}</option>`).join('') + `</select></label>`;
   }
+  for (const S of def.selects || []) {
+    const cur = (o[S.key] && S.options.some((x) => x.id === o[S.key])) ? o[S.key] : def.opts[S.key];
+    h += `<label class="field"><span>${esc(S.label)}</span><select data-oselect="${S.key}">` +
+      S.options.map((x) => `<option value="${x.id}"${x.id === cur ? ' selected' : ''}>${esc(x.name)}</option>`).join('') + `</select></label>`;
+  }
   // światło (Hue / lampy) albo podświetlenie TV
   const Lspec = def.light || def.lightOption;
   if (Lspec) {
@@ -783,6 +793,15 @@ function renderPanelDoor() {
   let h = `<div class="panel-head"><div><div class="eyebrow">Drzwi</div><h2>${esc(DOOR_NAMES[d.id])}</h2></div>` +
     `<button class="icon-btn" id="door-close" title="Odznacz (Esc)">✕</button></div>`;
   h += `<p class="muted">Otwór ${Math.round(g.along)} cm · skrzydło ${d.r} cm · wysokość ${PLAN.doorHeight} cm</p>`;
+  const dist = doorDistances(d, opt.shift || 0);
+  if (dist) {
+    const horiz = d.host[2] > d.host[3];
+    const [lo, hi] = shiftRange(d);
+    const base = dist[0] - (opt.shift || 0);
+    h += `<div class="field"><span>Położenie w ścianie – odległość od ściany ${horiz ? 'zachodniej (lewej na rzucie)' : 'północnej (górnej na rzucie)'}</span>` +
+      `<div class="unit"><input type="number" data-door-dist min="${Math.round(base + lo)}" max="${Math.round(base + hi)}" step="1" value="${Math.round(dist[0])}"><i>cm</i></div>` +
+      `<span class="muted small">Z drugiej strony: ${Math.round(dist[1])} cm do ${horiz ? 'wschodniego' : 'południowego'} końca ściany. Zakres ${Math.round(base + lo)}–${Math.round(base + hi)} cm.</span></div>`;
+  } else if (d.entry) h += `<p class="note">Położenie drzwi wejściowych wynika z klatki schodowej – nie da się go zmienić.</p>`;
   h += `<div class="field"><span>Typ</span><div class="radio-list">` + Object.entries(DOOR_TYPES).map(([k, l]) =>
     `<label class="check"><input type="radio" name="door-type" value="${k}"${opt.type === k ? ' checked' : ''}> ${esc(l)}</label>`).join('') + `</div></div>`;
   if (!none) {
@@ -814,13 +833,20 @@ function renderPanelDoor() {
   for (const b of panel.querySelectorAll('[data-flip]')) b.onclick = () => setDoor((o) => { if (b.dataset.flip === 'hinge') o.flipHinge = !o.flipHinge; else o.flipSwing = !o.flipSwing; });
   for (const b of panel.querySelectorAll('[data-finish]')) b.onclick = () => setDoor((o) => { o.finish = b.dataset.finish; });
   for (const b of panel.querySelectorAll('[data-closed]')) b.onclick = () => setDoor((o) => { o.closed = b.dataset.closed === '1'; });
+  const dd = panel.querySelector('[data-door-dist]');
+  if (dd) dd.onchange = () => {
+    const v = parseFloat(dd.value);
+    if (!Number.isFinite(v)) return;
+    const base = doorDistances(d, 0)[0];
+    setDoor((o) => { o.shift = Math.round(v - base); });
+  };
   $('#door-reset').onclick = () => { const next = { ...doc.doors }; delete next[d.id]; doc.doors = next; renderStructure(); renderPanel(); commit(); };
 }
 
 // ---------------------------------------------------------------- wykończenie (kolory ścian, posadzki…)
 
 let finishRoom = '1';
-const SIDES = [['', 'brak'], ['n', 'północna ↑'], ['s', 'południowa ↓'], ['w', 'zachodnia ←'], ['e', 'wschodnia →']];
+let finishWall = 'all'; // 'all' albo n / s / e / w – pojedyncza ściana pomieszczenia
 
 function swatches(list, current, attr) {
   let h = `<div class="swatches">`;
@@ -836,25 +862,37 @@ function finishHtml() {
   let h = `<h3>Wykończenie</h3><div class="room-tabs">`;
   for (const r of PLAN.rooms) h += `<button class="${String(r.n) === finishRoom ? 'on' : ''}" data-froom="${r.n}">${esc(r.short)}</button>`;
   h += `</div>`;
-  h += `<div class="finish-label">Ściany · <b>${esc(paletteName(st.walls[finishRoom]))}</b></div>`;
-  h += swatches(WALL_PALETTE, st.walls[finishRoom], 'data-wall');
   h += `<label class="field"><span>Posadzka</span><select data-floor>` +
     Object.entries(FLOORS).map(([k, f]) => `<option value="${k}"${st.floors[finishRoom] === k ? ' selected' : ''}>${esc(f.name)}</option>`).join('') + `</select></label>`;
-  const tl = st.tiles && st.tiles[finishRoom];
-  h += `<div class="grid2"><label class="field"><span>Płytki na ścianach</span><select data-tiles>` +
-    `<option value="">brak – tylko farba</option>` +
-    Object.entries(WALL_TILES).map(([k, t]) => `<option value="${k}"${tl && tl.pattern === k ? ' selected' : ''}>${esc(t.name)}</option>`).join('') + `</select></label>` +
-    `<label class="field"><span>Wysokość płytek</span><select data-tiles-h${tl ? '' : ' disabled'}>` +
+  // wybór ściany: całe pomieszczenie albo jedna ściana (kropka = ściana ma własne wykończenie)
+  h += `<div class="finish-label">Ściany <span class="muted">· kliknij ścianę w widoku 3D, żeby ją wybrać</span></div><div class="wall-tabs">` +
+    `<button data-fwall="all" class="${finishWall === 'all' ? 'on' : ''}">całe pomieszczenie</button>` +
+    WALL_SIDES.map(([k, l, a]) => `<button data-fwall="${k}" class="${finishWall === k ? 'on' : ''}">${a} ${l}${sideStyle(st, finishRoom, k).custom ? ' <i class="mark-dot"></i>' : ''}</button>`).join('') + `</div>`;
+  const tileRow = (tl, attr, inherit) => `<div class="grid2"><label class="field"><span>Płytki</span><select data-${attr}>` +
+    (inherit ? `<option value="inherit"${inherit === 'on' ? ' selected' : ''}>jak całe pomieszczenie</option>` : '') +
+    `<option value=""${!tl && inherit !== 'on' ? ' selected' : ''}>brak – tylko farba</option>` +
+    Object.entries(WALL_TILES).map(([k, t]) => `<option value="${k}"${tl && inherit !== 'on' && tl.pattern === k ? ' selected' : ''}>${esc(t.name)}</option>`).join('') + `</select></label>` +
+    `<label class="field"><span>Wysokość płytek</span><select data-${attr}-h${tl ? '' : ' disabled'}>` +
     TILE_HEIGHTS.map((x) => `<option value="${x.v}"${(tl ? tl.height : 272) === x.v ? ' selected' : ''}>${x.l}</option>`).join('') + `</select></label></div>`;
-  const acc = st.accent && st.accent.room === finishRoom ? st.accent : null;
-  h += `<div class="field"><span>Ściana akcentowa w: ${esc(room.short)}</span><div class="accent-row"><select data-accent-side>` +
-    SIDES.map(([k, l]) => `<option value="${k}"${(acc ? acc.side : '') === k ? ' selected' : ''}>${l}</option>`).join('') +
-    `</select><input type="color" data-accent-color value="${acc ? acc.color : '#2f4f40'}"${acc ? '' : ' disabled'}></div></div>`;
-  h += `<button class="link-btn" data-walls-all>Ten kolor ścian we wszystkich pomieszczeniach</button>`;
+  if (finishWall === 'all') {
+    h += `<div class="finish-label">Kolor ścian · <b>${esc(paletteName(st.walls[finishRoom]))}</b></div>`;
+    h += swatches(WALL_PALETTE, st.walls[finishRoom], 'data-wall');
+    h += tileRow(st.tiles && st.tiles[finishRoom], 'tiles', null);
+    h += `<button class="link-btn" data-walls-all>Ten kolor ścian we wszystkich pomieszczeniach</button>`;
+  } else {
+    const k = `${finishRoom}:${finishWall}`, ov = (st.sides && st.sides[k]) || {}, eff = sideStyle(st, finishRoom, finishWall);
+    const [, name, arrow] = WALL_SIDES.find((x) => x[0] === finishWall);
+    h += `<div class="finish-label">Ściana ${arrow} ${name} · <b>${esc(paletteName(eff.color))}</b>${ov.color ? '' : ' <span class="muted">(jak całe pomieszczenie)</span>'}</div>`;
+    h += swatches(WALL_PALETTE, eff.color, 'data-swall');
+    h += tileRow(eff.tile, 'stiles', 'tile' in ov ? 'off' : 'on');
+    if (eff.custom) h += `<button class="link-btn" data-side-reset>Przywróć jak całe pomieszczenie</button>`;
+  }
   h += `<div class="finish-label">Fronty kuchenne · <b>${esc(paletteName(st.kitchenFront))}</b></div>`;
   h += swatches(FRONTS, st.kitchenFront, 'data-front');
+  const counterHex = st.counterColor || COUNTERS[st.counter].hex;
+  h += `<div class="finish-label">Blat · <b>${esc(st.counterColor ? st.counterColor : COUNTERS[st.counter].name)}</b></div>`;
+  h += swatches(Object.entries(COUNTERS).map(([k, c]) => ({ name: c.name, hex: c.hex, key: k })), counterHex, 'data-counter');
   h += `<div class="grid2">` +
-    `<label class="field"><span>Blat</span><select data-counter>${Object.entries(COUNTERS).map(([k, c]) => `<option value="${k}"${st.counter === k ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>` +
     `<label class="field"><span>Ramy okien</span><select data-frames>${Object.entries(FRAMES).map(([k, c]) => `<option value="${k}"${st.frames === k ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>` +
     `</div>`;
   h += `<label class="field"><span>Posadzka balkonu</span><select data-balcony>` +
@@ -892,16 +930,41 @@ function bindFinish() {
     else st.tiles[finishRoom] = { pattern: v, height: (st.tiles[finishRoom] && st.tiles[finishRoom].height) || (finishRoom === '4' ? 272 : 120) };
   });
   sel('[data-tiles-h]', (st, v) => { if (st.tiles && st.tiles[finishRoom]) st.tiles[finishRoom] = { ...st.tiles[finishRoom], height: +v }; });
-  sel('[data-counter]', (st, v) => { st.counter = v; });
+  for (const b of p.querySelectorAll('[data-counter]')) b.onclick = () => setStyle((st) => {
+    const key = Object.keys(COUNTERS).find((k) => COUNTERS[k].hex === b.dataset.counter);
+    st.counter = key; delete st.counterColor;
+  });
+  const cc = p.querySelector('[data-counter-custom]');
+  if (cc) {
+    cc.addEventListener('input', () => { doc.style.counterColor = cc.value; cc.parentElement.style.setProperty('--c', cc.value); sync3d(); });
+    cc.addEventListener('change', () => setStyle(() => {}));
+  }
+  for (const b of p.querySelectorAll('[data-fwall]')) b.onclick = () => { finishWall = b.dataset.fwall; renderPanel(); };
+  const sideKey = () => `${finishRoom}:${finishWall}`;
+  const setSide = (fn) => setStyle((st) => {
+    st.sides = { ...(st.sides || {}) };
+    const o = { ...(st.sides[sideKey()] || {}) };
+    fn(o);
+    if (Object.keys(o).length) st.sides[sideKey()] = o; else delete st.sides[sideKey()];
+  });
+  for (const b of p.querySelectorAll('[data-swall]')) b.onclick = () => setSide((o) => { o.color = b.dataset.swall; });
+  const swc = p.querySelector('[data-swall-custom]');
+  if (swc) swc.addEventListener('change', () => setSide((o) => { o.color = swc.value; }));
+  const stl = p.querySelector('[data-stiles]');
+  if (stl) stl.onchange = () => setSide((o) => {
+    if (stl.value === 'inherit') delete o.tile;
+    else if (!stl.value) o.tile = null;
+    else o.tile = { pattern: stl.value, height: (o.tile && o.tile.height) || 272 };
+  });
+  const stlh = p.querySelector('[data-stiles-h]');
+  if (stlh) stlh.onchange = () => setSide((o) => {
+    const cur = o.tile || sideStyle(doc.style, finishRoom, finishWall).tile;
+    if (cur) o.tile = { ...cur, height: +stlh.value };
+  });
+  const sres = p.querySelector('[data-side-reset]');
+  if (sres) sres.onclick = () => setSide((o) => { delete o.color; delete o.tile; });
   sel('[data-frames]', (st, v) => { st.frames = v; });
   sel('[data-balcony]', (st, v) => { st.balcony = v; });
-  const side = p.querySelector('[data-accent-side]'), acol = p.querySelector('[data-accent-color]');
-  side.onchange = () => setStyle((st) => {
-    if (!side.value) { if (st.accent && st.accent.room === finishRoom) delete st.accent; return; }
-    st.accent = { room: finishRoom, side: side.value, color: acol.value };
-  });
-  acol.addEventListener('input', () => { if (doc.style.accent) { doc.style.accent.color = acol.value; sync3d(); } });
-  acol.addEventListener('change', () => setStyle(() => {}));
   const all = p.querySelector('[data-walls-all]');
   if (all) all.onclick = () => setStyle((st) => { for (const k of Object.keys(st.walls)) st.walls[k] = st.walls[finishRoom]; });
 }
@@ -1326,6 +1389,15 @@ async function setViewMode(m) {
       view3d = new View3D($('#stage3d'), {
         onSelect: (id) => select(id),
         onSelectDoor: (id) => selectDoor(id),
+        onSelectWall: (room, side) => {
+          select(null);
+          finishRoom = room; finishWall = side;
+          renderPanel();
+          const tabs = panel.querySelector('.wall-tabs');
+          if (tabs) tabs.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          const [, name] = WALL_SIDES.find((x) => x[0] === side);
+          toast(`Wybrano ścianę: ${PLAN.rooms.find((r) => String(r.n) === room).short} – ${name}`);
+        },
         onMove: (it, x, y, alt) => {
           const p = alt ? { x: Math.round(x), y: Math.round(y) } : snapPosition(it, x, y);
           it.x = p.x; it.y = p.y;

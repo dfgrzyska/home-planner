@@ -64,10 +64,15 @@ export const FRONTS = [
 
 export const COUNTERS = {
   oak: { name: 'Dąb', hex: '#b98a5a', wood: true },
+  oak_light: { name: 'Dąb jasny', hex: '#d9bb91', wood: true },
+  walnut: { name: 'Orzech', hex: '#6f4b34', wood: true },
   white_quartz: { name: 'Biały konglomerat', hex: '#eeece8' },
-  black_stone: { name: 'Czarny kamień', hex: '#2b2b2d' },
-  concrete: { name: 'Beton', hex: '#a9a7a2' },
   marble: { name: 'Marmur biały', hex: '#ecebea' },
+  terrazzo: { name: 'Lastryko', hex: '#e4e0d8' },
+  concrete: { name: 'Beton', hex: '#a9a7a2' },
+  grey_stone: { name: 'Szary kamień', hex: '#8e8c88' },
+  black_stone: { name: 'Czarny kamień', hex: '#2b2b2d' },
+  black_matte: { name: 'Czarny mat', hex: '#1f2022' },
 };
 
 export const FRAMES = {
@@ -84,7 +89,20 @@ export const DEFAULT_STYLE = {
   balcony: 'balcony_tile',
   frames: 'anthracite',
   tiles: {}, // { '4': { pattern: 'marble_white', height: 272 } }
+  sides: {}, // pojedyncze ściany: { '1:n': { color: '#hex', tile: { pattern, height } | null } }
 };
+
+export const WALL_SIDES = [['n', 'północna', '↑'], ['s', 'południowa', '↓'], ['w', 'zachodnia', '←'], ['e', 'wschodnia', '→']];
+
+// Wykończenie konkretnej ściany pomieszczenia (strona n/s/e/w): własne albo jak całe pomieszczenie
+export function sideStyle(style, room, side) {
+  const o = (style.sides && style.sides[`${room}:${side}`]) || {};
+  return {
+    color: o.color || style.walls[room],
+    tile: 'tile' in o ? o.tile : (style.tiles && style.tiles[room]) || null,
+    custom: !!(o.color || 'tile' in o),
+  };
+}
 
 const HEX = /^#[0-9a-f]{6}$/i;
 
@@ -101,6 +119,7 @@ export function normalizeStyle(s) {
   }
   out.kitchenFront = HEX.test(s.kitchenFront || '') ? s.kitchenFront.toLowerCase() : d.kitchenFront;
   out.counter = COUNTERS[s.counter] ? s.counter : d.counter;
+  if (HEX.test(s.counterColor || '')) out.counterColor = s.counterColor.toLowerCase();
   out.balcony = FLOORS[s.balcony] ? s.balcony : d.balcony;
   out.frames = FRAMES[s.frames] ? s.frames : d.frames;
   out.tiles = {};
@@ -112,10 +131,25 @@ export function normalizeStyle(s) {
       }
     }
   }
+  out.sides = {};
+  const okTile = (t) => t && WALL_TILES[t.pattern] ? { pattern: t.pattern, height: TILE_HEIGHTS.some((x) => x.v === t.height) ? t.height : 272 } : null;
+  if (s.sides && typeof s.sides === 'object') {
+    for (const [k, v] of Object.entries(s.sides)) {
+      const [room, side] = k.split(':');
+      if (!out.walls[room] || !['n', 's', 'e', 'w'].includes(side) || !v || typeof v !== 'object') continue;
+      const o = {};
+      if (HEX.test(v.color || '')) o.color = v.color.toLowerCase();
+      if ('tile' in v) o.tile = okTile(v.tile);
+      if (Object.keys(o).length) out.sides[k] = o;
+    }
+  }
+  // starsze projekty: jedna ściana akcentowa → kolor pojedynczej ściany
   if (s.accent && typeof s.accent === 'object') {
-    // ściana akcentowa: { room: '1', side: 'n'|'s'|'e'|'w', color: '#hex' }
     const a = s.accent;
-    if (out.walls[a.room] && ['n', 's', 'e', 'w'].includes(a.side) && HEX.test(a.color || '')) out.accent = { room: String(a.room), side: a.side, color: a.color.toLowerCase() };
+    if (out.walls[a.room] && ['n', 's', 'e', 'w'].includes(a.side) && HEX.test(a.color || '')) {
+      const k = `${a.room}:${a.side}`;
+      out.sides[k] = { ...(out.sides[k] || {}), color: a.color.toLowerCase() };
+    }
   }
   return out;
 }

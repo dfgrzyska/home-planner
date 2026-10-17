@@ -182,6 +182,39 @@ function buildPlant(sp, w, d, H, col) {
       }
       break;
     }
+    case 'sakura': case 'klon': {
+      const sak = sp === 'sakura';
+      pot(g, sak ? 28 : 24, sak ? 45 : 40, col || (sak ? '#8c8a85' : '#5d5e60'));
+      const base = sak ? 45 : 40;
+      const bark = mat(sak ? '#4b3a32' : '#5a4436', { rough: 0.9 });
+      stick(g, [0, base, 0], [4, H * 0.5, 2], sak ? 3 : 2.4, bark);
+      const tips = [];
+      for (let i = 0; i < 6; i++) {
+        const a = i * 1.05 + 0.3, r = R * (sak ? 0.55 : 0.6);
+        const tip = [Math.cos(a) * r, H * (sak ? 0.72 : 0.62) + rnd(i) * H * 0.18, Math.sin(a) * r];
+        stick(g, [4, H * 0.5, 2], tip, sak ? 1.4 : 1.1, bark);
+        tips.push(tip);
+      }
+      const cols = sak ? ['#f6c6d6', '#f2b3c7', '#fadbe5'] : ['#b8382c', '#a52a24', '#c94a30', '#8e2620'];
+      // korona z wielu drobnych kępek kwiatów / liści wokół końców gałęzi
+      for (let i = 0; i < (sak ? 60 : 70); i++) {
+        const t = tips[i % tips.length];
+        const s = (sak ? 6 : 5) + rnd(i + 7) * 5;
+        const spread = 1 + rnd(i + 11) * 0.6;
+        sphere(g, s, t[0] * (0.55 + rnd(i) * 0.7) * spread, t[1] + (rnd(i + 2) - 0.35) * 34, t[2] * (0.55 + rnd(i + 1) * 0.7) * spread, mat(cols[i % cols.length], { rough: 0.9 }), sak ? 0.75 : 0.5);
+      }
+      break;
+    }
+    case 'bambus': {
+      box(g, w, 40, d, 0, 0, 0, mat(col || '#5d5e60', { rough: 0.8 }));
+      for (let i = 0; i < 14; i++) {
+        const x = -w / 2 + 6 + (i / 13) * (w - 12) + (rnd(i) - 0.5) * 4, z = (rnd(i + 3) - 0.5) * (d - 10);
+        const h = H * (0.75 + rnd(i + 5) * 0.25);
+        stick(g, [x, 38, z], [x + (rnd(i + 9) - 0.5) * 12, h, z + (rnd(i + 4) - 0.5) * 8], 1.2, mat('#7a9a3c', { rough: 0.6 }));
+        for (let k = 0; k < 5; k++) leaf(g, 16, 3.5, x + (rnd(i * 7 + k) - 0.5) * 18, h * (0.55 + k * 0.09), z + (rnd(i + k) - 0.5) * 12, rnd(i * 3 + k) * 6, -0.4, GREENS[(i + k) % 4], 0.12);
+      }
+      break;
+    }
     case 'ziola': case 'lawenda': {
       box(g, w, 15, d, 0, 0, 0, mat(col || (sp === 'lawenda' ? '#b5b0a6' : '#c9845f'), { rough: 0.85 }));
       for (let x = -w / 2 + 6; x < w / 2 - 3; x += 8) {
@@ -718,6 +751,119 @@ export function buildFurniture(it, def, style) {
         rim.position.z = -hd + 0.4;
         g.add(rim);
       }
+      break;
+    }
+    case 'curtain': {
+      const st = o.state || def.opts.state, fab = o.fabric || def.opts.fabric;
+      const FAB = { linen: ['#e8e1d4', 0.92, 0.95], blackout: ['#6b6e73', 1, 0.9], velvet: ['#4a5a4f', 1, 0.7], sheer: ['#f7f6f2', 0.35, 0.9] }[fab] || ['#e8e1d4', 0.92, 0.95];
+      const m = new THREE.MeshStandardMaterial({ color: col || FAB[0], roughness: FAB[2], side: THREE.DoubleSide });
+      if (FAB[1] < 1) { m.transparent = true; m.opacity = FAB[1]; m.depthWrite = FAB[1] > 0.6; }
+      box(g, w, 2, 3, 0, H + 1, -hd + 2, metal('#cfd1d3')); // szyna przy suficie
+      const pw = st === 'closed' ? w / 2 : st === 'half' ? w * 0.3 : Math.max(18, w * 0.16);
+      const amp = st === 'closed' ? 3 : 5, period = st === 'closed' ? 12 : 8;
+      const panel = (cx) => {
+        const geo = new THREE.PlaneGeometry(pw, H, Math.max(2, Math.ceil(pw / 2)), 1);
+        const pos = geo.attributes.position;
+        for (let i = 0; i < pos.count; i++) pos.setZ(i, Math.sin((pos.getX(i) / period) * Math.PI * 2) * amp);
+        geo.computeVertexNormals();
+        const p = new THREE.Mesh(geo, m);
+        p.position.set(cx, H / 2, -hd + 6);
+        g.add(p);
+      };
+      panel(-hw + pw / 2);
+      panel(hw - pw / 2);
+      break;
+    }
+    case 'sconce': {
+      const L = lightOf(it, def), on = L && L.on;
+      const m = metal(col || '#2c2c2e');
+      box(g, 8, 14, 1, 0, H / 2 - 7, -hd + 0.5, m);
+      if (def.style === 'updown') {
+        const zc = -hd + 6;
+        cyl(g, 4, H, 0, 0, zc, m);
+        cyl(g, 3.4, 0.4, 0, H, zc, glowMat(L.color, on, 1.8));
+        cyl(g, 3.4, 0.4, 0, -0.4, zc, glowMat(L.color, on, 1.8));
+        box(g, 2, 2, 5, 0, H / 2 - 1, -hd + 3, m);
+        if (on) {
+          addLight(g, { kind: 'spot', pos: [0, H + 1, zc], dir: [0, 1, -0.08], angle: 45, color: L.color, lm: L.lm / 2, k: 0.8 });
+          addLight(g, { kind: 'spot', pos: [0, -1, zc], dir: [0, -1, -0.08], angle: 45, color: L.color, lm: L.lm / 2, k: 0.8 });
+          addLight(g, { kind: 'glow', pos: [0, H, -hd], dir: [0, 0, -1], size: [55, 120], shape: 'up', color: L.color, color2: L.color, lm: L.lm });
+          addLight(g, { kind: 'glow', pos: [0, 0, -hd], dir: [0, 0, -1], size: [55, 120], shape: 'down', color: L.color, color2: L.color, lm: L.lm });
+        }
+      } else if (def.style === 'globe') {
+        stick(g, [0, H / 2, -hd + 1], [0, H / 2, -hd + 8], 0.8, m);
+        sphere(g, Math.min(hw, 10), 0, H / 2, -hd + 8 + Math.min(hw, 10), glowMat(L.color, on, 1.1));
+        if (on) {
+          addLight(g, { kind: 'point', pos: [0, H / 2, -hd + 8 + Math.min(hw, 10)], color: L.color, lm: L.lm });
+          addLight(g, { kind: 'glow', pos: [0, H / 2, -hd], dir: [0, 0, -1], size: [100, 100], shape: 'box', color: L.color, color2: L.color, lm: L.lm });
+        }
+      } else {
+        stick(g, [0, H / 2, -hd + 1], [0, H / 2 + 6, hd - 10], 0.7, m);
+        cyl(g, 8, 12, 0, H / 2 - 6, hd - 10, m, 4);
+        cyl(g, 6.5, 0.4, 0, H / 2 - 6.2, hd - 10, glowMat(L.color, on, 2));
+        if (on) addLight(g, { kind: 'spot', pos: [0, H / 2 - 7, hd - 10], dir: [0, -1, 0], angle: L.angle || 60, color: L.color, lm: L.lm });
+      }
+      break;
+    }
+    case 'monitor': {
+      const L = lightOf(it, def), on = L && L.on;
+      const dk = mat(col || '#1b1c1e', { rough: 0.4 });
+      box(g, w * 0.32, 1.5, d * 0.7, 0, 0, 2, dk);
+      box(g, 4, H * 0.55, 2.5, 0, 1.5, -hd + 6, dk);
+      const ph = H - 8;
+      box(g, w, ph, 2.2, 0, 8, -hd + 8.5, dk);
+      box(g, w - 1.6, ph - 1.6, 0.3, 0, 8.8, -hd + 9.7, on ? glowMat(L.color, true, 0.9) : mat('#0d0e12', { rough: 0.12, metal: 0.3 }));
+      if (on) addLight(g, { kind: 'point', pos: [0, 8 + ph / 2, -hd + 20], color: L.color, lm: L.lm });
+      break;
+    }
+    case 'laptop': {
+      const L = lightOf(it, def), on = L && L.on;
+      const alu = mat(col || '#c9cbcd', { rough: 0.35, metal: 0.8 });
+      box(g, w, 1.1, d, 0, 0, 0, alu);
+      box(g, w * 0.82, 0.2, d * 0.42, 0, 1.1, -d * 0.12, dark());
+      const lid = new THREE.Group();
+      box(lid, w, d * 0.95, 0.5, 0, 0, 0, alu);
+      box(lid, w - 1.6, d * 0.95 - 2, 0.1, 0, 1, 0.3, on ? glowMat(L.color, true, 0.9) : mat('#0d0e12', { rough: 0.12, metal: 0.3 }));
+      lid.position.set(0, 1.1, -hd + 0.3);
+      lid.rotation.x = -0.32; // otwarty ok. 110°
+      g.add(lid);
+      if (on) addLight(g, { kind: 'point', pos: [0, 12, -hd + 12], color: L.color, lm: L.lm });
+      break;
+    }
+    case 'pc': {
+      const m = mat(col || '#1d1e20', { rough: 0.45 });
+      box(g, w, H, d, 0, 0, 0, m);
+      box(g, w - 4, H - 8, 0.3, 0, 4, hd + 0.1, mat('#2a2c30', { rough: 0.3 }));
+      cyl(g, 0.8, 0.3, w / 2 - 4, H - 5, hd + 0.2, glowMat('#7fb2ff', true, 2)).rotation.x = Math.PI / 2;
+      break;
+    }
+    case 'keyboard': {
+      box(g, w - 12, 2, d, -6, 0, 0, mat(col || '#2a2b2e', { rough: 0.6 }));
+      box(g, w - 15, 0.4, d - 3, -6, 2, 0, mat('#3a3c40', { rough: 0.8 }));
+      const ms = sphere(g, 3.2, hw - 4, 1.4, 0, mat(col || '#2a2b2e', { rough: 0.4 }));
+      ms.scale.set(1, 0.45, 1.7);
+      break;
+    }
+    case 'hammock': {
+      const stand = w >= 90;
+      const steel = metal('#2c2c2e');
+      const seatY = 45;
+      if (stand) {
+        box(g, w * 0.9, 3, 5, 0, 0, 0, steel); box(g, 5, 3, d * 0.9, 0, 0, 0, steel);
+        // wygięty słup stelaża zakończony nad środkiem siedziska
+        const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(-hw * 0.75, 0, -hd * 0.6), new THREE.Vector3(-hw * 0.8, H * 0.6, -hd * 0.6), new THREE.Vector3(-hw * 0.35, H, -hd * 0.2), new THREE.Vector3(0, H - 4, 0)]);
+        const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 32, 2.2, 10, false), steel);
+        g.add(tube);
+      }
+      const top = stand ? H - 6 : 272 - elevationOf(it, def);
+      stick(g, [0, top, 0], [0, seatY + 55, 0], 0.5, mat('#c9b99a', { rough: 1 }));
+      // kokon z tkaniny: dolna część sfery widoczna z obu stron
+      const chair = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16, 0, Math.PI * 2, Math.PI * 0.35, Math.PI * 0.65),
+        new THREE.MeshStandardMaterial({ color: col || '#e6dfd2', roughness: 0.95, side: THREE.DoubleSide }));
+      chair.scale.set(w * 0.3, 55, d * 0.28);
+      chair.position.set(0, seatY + 55, 0);
+      g.add(chair);
+      cyl(g, w * 0.25, 8, 0, seatY - 2, 0, fabric('#c9c2b6'));
       break;
     }
     case 'washer_tower': {

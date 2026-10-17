@@ -208,6 +208,10 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 .item .leaf2d { fill: #5b8f45; stroke: #2f5427; stroke-width: .5; vector-effect: non-scaling-stroke; }
 .item .flower2d { fill: #f2a7c0; stroke: #a8566f; stroke-width: .5; vector-effect: non-scaling-stroke; }
 .item .mirror2d { fill: #cfdde3; }
+.item .screen2d { fill: #2b2d31; }
+.item .curtain2d { fill: none; stroke: #8a7f6e; stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+.item .curtain2d.sheer { stroke: #b9b4aa; stroke-dasharray: 3 2; }
+.cat-okna { --fill: #ece6dc; }
 .item .lavender2d { fill: #9b7fd0; stroke: none; }
 .item .slat-outline { fill: none; stroke-dasharray: 2 2; }
 .item .body { fill: var(--fill); stroke: #3a3d44; stroke-width: 1.2; vector-effect: non-scaling-stroke; }
@@ -266,6 +270,10 @@ body.shot .layout { grid-template-columns: 1fr; }
 /* ---------- wykończenie */
 .room-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
 .room-tabs button { border: 1px solid var(--border); background: #fafaf8; border-radius: 14px; padding: 3px 10px; font-size: 12px; cursor: pointer; }
+.wall-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.wall-tabs button { border: 1px solid var(--border); background: #fafaf8; border-radius: 6px; padding: 3px 8px; font-size: 12px; cursor: pointer; }
+.wall-tabs button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.mark-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #d9822b; vertical-align: middle; }
 .room-tabs button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .finish-label { font-size: 12px; color: var(--muted); margin: 10px 0 6px; }
 .finish-label b { color: var(--text); font-weight: 600; }

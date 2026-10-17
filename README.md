@@ -30,6 +30,11 @@ Rzut jest odwzorowany wektorowo w skali 1:1 w centymetrach na podstawie rzutu 1:
 - **Łazienka**: płytki na ścianach (gres 60×120 marmur / beton / beż / grafit, cegiełka, zellige, lastryko) do 120 cm,
   210 cm albo do sufitu – dla każdego pomieszczenia; lustra LED (prostokątne, okrągłe) i nieregularne (łuk, „kamyk”,
   „fala”, „chmurka”) z opcjonalnym podświetleniem; wieża pralka + suszarka; ciemnoszare podłogi.
+- **Każda ściana osobno**: kolor i płytki dla całego pomieszczenia albo pojedynczej ściany (wybór w panelu lub kliknięciem
+  ściany w 3D); blat w 10 wariantach albo w dowolnym kolorze; przesuwanie drzwi wewnętrznych wzdłuż ściany.
+- **Zasłony i firany** (len, blackout, welur, firana; rozsunięte / w połowie / zasunięte), **kinkiety** (góra-dół, kula,
+  na wysięgniku), **biuro**: monitor 24–34", MacBook Air 13/15", komputer, klawiatura z myszą.
+- **Balkon**: zestaw bistro, stolik, narożnik, krzesło-hamak, sakura, klon japoński, bambus.
 - **Rośliny i kwiaty**: monstera, fikus, strelicja, oliwka, kentia, sansewieria, zamiokulkas, storczyk, bukiet, zioła, lawenda.
 - **Zwierzęta**: legowiska dobrane do wagi psa (labrador 35 kg → XL 110 × 85 cm), stojak z miskami.
 - **Wykończenie** (panel po prawej, gdy nic nie jest zaznaczone): kolor ścian i posadzka dla każdego pomieszczenia,

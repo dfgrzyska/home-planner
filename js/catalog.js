@@ -29,7 +29,7 @@ const PARTITION_SLATS = [
 export const CATEGORIES = [
   { id: 'salon', name: 'Salon' },
   { id: 'lamele', name: 'Lamele' },
-  { id: 'hue', name: 'Oświetlenie Philips Hue' },
+  { id: 'hue', name: 'Oświetlenie (Philips Hue, kinkiety)' },
   { id: 'rosliny', name: 'Rośliny i kwiaty' },
   { id: 'jadalnia', name: 'Jadalnia' },
   { id: 'sypialnia', name: 'Sypialnia' },
@@ -38,6 +38,7 @@ export const CATEGORIES = [
   { id: 'przedpokoj', name: 'Przedpokój' },
   { id: 'biuro', name: 'Gabinet / dziecko' },
   { id: 'balkon', name: 'Balkon' },
+  { id: 'okna', name: 'Zasłony i firany' },
   { id: 'zwierzeta', name: 'Zwierzęta' },
   { id: 'inne', name: 'Inne' },
 ];
@@ -68,6 +69,39 @@ export const CATALOG = [
     range: { min: 40, max: 240, step: 10, label: 'Szerokość' } },
   { key: 'sideboard', name: 'Komoda', cat: 'salon', kind: 'cabinet', w: 150, d: 45,
     variants: [{ l: '120 × 45', w: 120, d: 45 }, { l: '150 × 45', w: 150, d: 45 }, { l: '180 × 45', w: 180, d: 45 }] },
+
+  // Zasłony i firany – szyna pod sufitem, panele rozsunięte / zasunięte; kolor elementu = kolor tkaniny
+  { key: 'curtain', name: 'Zasłony (para) na szynie', hint: 'len / zaciemniające / welur', cat: 'okna', kind: 'curtain', w: 180, d: 12, layer: 0,
+    range: { min: 60, max: 600, step: 5, label: 'Szerokość szyny' },
+    selects: [
+      { key: 'fabric', label: 'Tkanina', options: [{ id: 'linen', name: 'Len – lekko prześwitujący' }, { id: 'blackout', name: 'Zaciemniająca (blackout)' }, { id: 'velvet', name: 'Welur' }, { id: 'sheer', name: 'Firana – przezroczysta' }] },
+      { key: 'state', label: 'Stan', options: [{ id: 'open', name: 'rozsunięte' }, { id: 'half', name: 'w połowie' }, { id: 'closed', name: 'zasunięte' }] },
+    ], opts: { fabric: 'linen', state: 'open' } },
+  { key: 'sheer', name: 'Firana', hint: 'przezroczysta, zasunięta', cat: 'okna', kind: 'curtain', w: 180, d: 8, layer: 0,
+    range: { min: 60, max: 600, step: 5, label: 'Szerokość szyny' },
+    selects: [
+      { key: 'fabric', label: 'Tkanina', options: [{ id: 'sheer', name: 'Firana – przezroczysta' }, { id: 'linen', name: 'Len – lekko prześwitujący' }] },
+      { key: 'state', label: 'Stan', options: [{ id: 'closed', name: 'zasunięta' }, { id: 'half', name: 'w połowie' }, { id: 'open', name: 'rozsunięta' }] },
+    ], opts: { fabric: 'sheer', state: 'closed' } },
+
+  // Kinkiety – na ścianie (wysokość montażu w panelu)
+  { key: 'sconce_updown', name: 'Kinkiet góra-dół', hint: 'smugi światła na ścianie w górę i w dół', cat: 'hue', kind: 'sconce', style: 'updown', w: 9, d: 12, layer: 2,
+    light: { type: 'sconce', lm: 500, dir: 'updown' }, lightDefaults: { color: '#ffb066' } },
+  { key: 'sconce_globe', name: 'Kinkiet z kloszem kulą', cat: 'hue', kind: 'sconce', style: 'globe', w: 20, d: 24, layer: 2,
+    light: { type: 'point', lm: 450 }, lightDefaults: { color: '#ffb066' } },
+  { key: 'sconce_arm', name: 'Kinkiet na wysięgniku', hint: 'do czytania przy łóżku / fotelu', cat: 'hue', kind: 'sconce', style: 'arm', w: 18, d: 50, layer: 2,
+    light: { type: 'spot', lm: 350, dir: 'down', angle: 60 }, lightDefaults: { color: '#ffb066' } },
+
+  // Komputer – na biurku (montaż od podłogi = wysokość blatu)
+  { key: 'monitor', name: 'Monitor', cat: 'biuro', kind: 'monitor', w: 61, d: 22, layer: 2,
+    variants: [{ l: '24"', w: 54, d: 20, h: 42 }, { l: '27"', w: 61, d: 22, h: 47 }, { l: '32"', w: 71, d: 24, h: 53 }, { l: '34" ultrawide', w: 81, d: 25, h: 45 }], defaultVariant: 1,
+    lightOption: { name: 'Ekran włączony', type: 'screen', lm: 120 }, lightDefaults: { color: '#d6e4ff' }, opts: { hue: false } },
+  { key: 'macbook_air', name: 'MacBook Air', hint: 'otwarty, na biurku', cat: 'biuro', kind: 'laptop', w: 30.4, d: 21.5, layer: 2,
+    variants: [{ l: '13"', w: 30.4, d: 21.5, h: 20 }, { l: '15"', w: 34, d: 23.8, h: 22 }],
+    lightOption: { name: 'Ekran włączony', type: 'screen', lm: 80 }, lightDefaults: { color: '#d6e4ff' }, opts: { hue: false } },
+  { key: 'pc_tower', name: 'Komputer (obudowa PC)', hint: 'pod biurkiem albo na nim', cat: 'biuro', kind: 'pc', w: 21, d: 45, layer: 2,
+    variants: [{ l: 'midi tower 21 × 45 × 47', w: 21, d: 45, h: 47 }, { l: 'mini ITX 18 × 37 × 35', w: 18, d: 37, h: 35 }] },
+  { key: 'keyboard', name: 'Klawiatura i mysz', cat: 'biuro', kind: 'keyboard', w: 55, d: 15, layer: 2 },
 
   // Philips Hue (oferta 2026). light: type = strip | point | spot | wall (świeci na ścianę za lampą),
   // lm = strumień świetlny [lm] (paski: lmPerM na metr), gradient = dwa kolory. layer 3 = sufit / wiszące (bez kolizji).
@@ -257,6 +291,15 @@ export const CATALOG = [
   { key: 'lounger', name: 'Leżak', cat: 'balkon', kind: 'lounger', w: 65, d: 190 },
   { key: 'b_sofa', name: 'Sofa ogrodowa', cat: 'balkon', kind: 'sofa', w: 150, d: 70 },
   { key: 'planter', name: 'Donica', cat: 'balkon', kind: 'plant', w: 80, d: 30 },
+  { key: 'b_bistro', name: 'Zestaw bistro (stolik + 2 krzesła)', cat: 'balkon', kind: 'table', w: 70, d: 60, opts: { chairs: true } },
+  { key: 'b_coffee', name: 'Stolik kawowy balkonowy', cat: 'balkon', kind: 'table', w: 90, d: 50 },
+  { key: 'b_corner', name: 'Narożnik balkonowy (technorattan)', hint: 'szezlong po prawej, patrząc na front', cat: 'balkon', kind: 'sofa_l', w: 200, d: 160, opts: { mirror: false } },
+  { key: 'hammock_chair', name: 'Krzesło-hamak', hint: 'wiszące, na stelażu albo na haku', cat: 'balkon', kind: 'hammock', w: 100, d: 100, square: true,
+    variants: [{ l: 'na stelażu Ø 100 × 195', w: 100, d: 100, h: 195 }, { l: 'podwieszane (hak w suficie) 80 × 80', w: 80, d: 80, h: 120 }] },
+  { key: 'pl_sakura', name: 'Sakura w donicy', hint: 'wiśnia japońska, ok. 190 cm', cat: 'balkon', kind: 'plant3', plant: 'sakura', w: 120, d: 120, square: true },
+  { key: 'pl_klon', name: 'Klon japoński w donicy', hint: 'czerwone liście, ok. 150 cm', cat: 'balkon', kind: 'plant3', plant: 'klon', w: 100, d: 100, square: true },
+  { key: 'pl_bambus', name: 'Bambus w skrzyni', hint: 'zielona osłona, ok. 200 cm', cat: 'balkon', kind: 'plant3', plant: 'bambus', w: 80, d: 35 },
+
 
   // Zwierzęta – legowisko dobierane do psa: długość ≈ długość psa leżącego na boku (nos–nasada ogona) + 15–20 cm.
   // Labrador 35 kg ≈ 95–105 cm → 110 × 85 cm (XL).

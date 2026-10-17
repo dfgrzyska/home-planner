@@ -65,6 +65,16 @@ function drawPlant(sp, w, d, potColor) {
     for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; s += `<circle class="flower2d" cx="${f(Math.cos(a) * hw * 0.55)}" cy="${f(Math.sin(a) * hd * 0.55)}" r="${f(hw * 0.22)}"${potColor ? ` style="fill:${potColor}"` : ''}/>`; }
     return s + circle(0, 0, hw * 0.2, 'flower2d');
   }
+  if (sp === 'sakura' || sp === 'klon') {
+    const col = sp === 'sakura' ? '#f2b9cb' : '#b8382c';
+    for (let i = 0; i < 12; i++) { const a = i * 2.4, r = (0.35 + ((i * 37) % 10) / 25) * Math.min(hw, hd); s += `<circle class="leaf2d" cx="${f(Math.cos(a) * r)}" cy="${f(Math.sin(a) * r)}" r="${f(Math.min(hw, hd) * 0.3)}" style="fill:${col}"/>`; }
+    return s + circle(0, 0, Math.min(hw, hd) * 0.28, 'body pot');
+  }
+  if (sp === 'bambus') {
+    s += rect(-hw, -hd, w, d, 'body pot', 2);
+    for (let x = -hw + 6; x < hw - 3; x += 7) s += circle(x, (x * 7) % 5 - 2, 2.2, 'leaf2d');
+    return s;
+  }
   if (sp === 'ziola' || sp === 'lawenda') {
     s += rect(-hw, -hd, w, d, 'body pot', 2);
     const cls = sp === 'lawenda' ? 'lavender2d' : 'leaf2d';
@@ -454,6 +464,30 @@ export function drawShape(item, def) {
       s += rect(-hw, -hd, w, d, 'body', 2);
       s += circle(0, 2, Math.min(w, d) * 0.3, 'body2') + circle(0, 2, Math.min(w, d) * 0.2);
       s += `<text class="mark" x="0" y="${f(-hd + 8)}">2×</text>`;
+      break;
+    }
+    case 'curtain': {
+      const st = opts.state || def.opts.state;
+      const fab = opts.fabric || def.opts.fabric;
+      s += line(-hw, -hd + 1, hw, -hd + 1, 'ln strong');
+      const seg = (x0, x1) => {
+        let p = `M${f(x0)} ${f(-hd + 5)}`;
+        for (let x = x0; x < x1 - 0.1; x += 6) p += ` Q${f(Math.min(x + 3, x1))} ${f(-hd + (Math.round(x / 6) % 2 ? 9 : 1))} ${f(Math.min(x + 6, x1))} ${f(-hd + 5)}`;
+        return `<path class="curtain2d${fab === 'sheer' ? ' sheer' : ''}" d="${p}"${item.c ? ` style="stroke:${item.c}"` : ''}/>`;
+      };
+      const pw = st === 'closed' ? w / 2 : st === 'half' ? w * 0.3 : Math.max(18, w * 0.16);
+      s += seg(-hw, -hw + pw) + seg(hw - pw, hw);
+      break;
+    }
+    case 'sconce': s += rect(-hw, -hd, w, Math.min(d, 6), 'body lamp-body', 2) + (def.style === 'arm' ? line(0, -hd + 4, 0, hd - 8, 'ln strong') + circle(0, hd - 8, 8, 'body lamp-body') : circle(0, -hd + 8, Math.min(hw, 6), 'lamp-led')); break;
+    case 'monitor': s += rect(-hw, -hd + 4, w, 3, 'body screen2d', 1) + rect(-w * 0.17, -hd + 7, w * 0.34, d * 0.55, 'body', 2); break;
+    case 'laptop': s += rect(-hw, -hd, w, d, 'body', 1.5) + rect(-hw + 2, -hd + 2, w - 4, d * 0.55, 'ln thin') + rect(-w * 0.18, hd - d * 0.32, w * 0.36, d * 0.24, 'ln thin'); break;
+    case 'pc': s += rect(-hw, -hd, w, d, 'body', 1.5) + line(-hw + 3, hd - 3, hw - 3, hd - 3, 'ln strong'); break;
+    case 'keyboard': s += rect(-hw, -hd, w - 12, d, 'body', 1.5) + ellipse(hw - 4, 0, 3.2, 5.5, 'body'); break;
+    case 'hammock': {
+      const stand = w >= 90;
+      if (stand) s += circle(0, 0, Math.min(hw, hd), 'ln dash') + line(-hw * 0.9, 0, hw * 0.9, 0, 'ln') + line(0, -hd * 0.9, 0, hd * 0.9, 'ln');
+      s += ellipse(0, stand ? hd * 0.15 : 0, hw * 0.6, hd * 0.5, 'body') + ellipse(0, stand ? hd * 0.15 : 0, hw * 0.4, hd * 0.32, 'body2');
       break;
     }
     case 'slats': case 'slat_partition': {

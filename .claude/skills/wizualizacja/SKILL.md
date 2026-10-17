@@ -33,18 +33,20 @@ Zmieniaj **tylko** `style`, `doors` (wykończenie/typ) oraz kolory mebli (`items
 | `floors` | `{"1".."5": klucz}` – `oak_light`, `oak_natural`, `walnut`, `oak_herringbone`, `oak_grey`, `oak_dark_grey`, `tile_light`, `tile_grey`, `tile_large`, `tile_anthracite`, `gres_dark`, `concrete`, `concrete_dark`, `terrazzo` |
 | `balcony` | `deck`, `balcony_tile` (lub dowolny klucz posadzki) |
 | `kitchenFront` | `#rrggbb` |
-| `counter` | `oak`, `white_quartz`, `black_stone`, `concrete`, `marble` |
+| `counter` | `oak`, `oak_light`, `walnut`, `white_quartz`, `marble`, `terrazzo`, `concrete`, `grey_stone`, `black_stone`, `black_matte` |
 | `frames` | `anthracite`, `white`, `black` (ramy okien) |
 | `tiles` | opcjonalnie `{"4": {"pattern": klucz, "height": 120\|210\|272}}` – płytki na ścianach pomieszczenia: `marble_white`, `concrete_grey`, `sand_beige`, `graphite`, `subway_white`, `zellige_green`, `terrazzo_wall` (`WALL_TILES` w `js/style.js`) |
-| `accent` | opcjonalnie `{"room": "1", "side": "n"/"s"/"e"/"w", "color": "#rrggbb"}` – ściana akcentowa (n = od klatki, s = od balkonu, e = wschodnia z oknami, w = zachodnia) |
+| `sides` | opcjonalnie pojedyncze ściany: `{"1:n": {"color": "#rrggbb", "tile": {"pattern": klucz, "height": 120\|210\|272} \| null}}` – strony: n = od klatki, s = od balkonu, e = wschodnia (okna), w = zachodnia; `tile: null` = bez płytek mimo płytek w pomieszczeniu |
+| `counterColor` | opcjonalnie dowolny kolor blatu `#rrggbb` (zamiast `counter`) |
 
-Drzwi (`doors`, obok `style` w dokumencie): `{"d1".."d4": {"type": "swing"|"hidden"|"sliding"|"none", "finish": "white"|"oak"|"walnut"|"graphite"|"black"|"entrance", "flipHinge": bool, "flipSwing": bool, "closed": bool}}` – d1 wejściowe, d2 łazienka, d3 pokój 2, d4 pokój 3 (`js/doors.js`). Zmieniaj tylko `finish`/`type`, gdy opis o to prosi („drzwi dębowe”, „drzwi ukryte w kolorze ściany”); kierunku otwierania nie ruszaj. Do zdjęć warto ustawić `closed: true` dla drzwi widocznych w kadrze.
+Drzwi (`doors`, obok `style` w dokumencie): `{"d1".."d4": {"type": "swing"|"hidden"|"sliding"|"none", "finish": "white"|"oak"|"walnut"|"graphite"|"black"|"entrance", "flipHinge": bool, "flipSwing": bool, "closed": bool}}` – d1 wejściowe, d2 łazienka, d3 pokój 2, d4 pokój 3 (`js/doors.js`). `shift` (cm) przesuwa otwór drzwiowy wzdłuż ściany – nie zmieniaj. Zmieniaj tylko `finish`/`type`, gdy opis o to prosi („drzwi dębowe”, „drzwi ukryte w kolorze ściany”); kierunku otwierania nie ruszaj. Do zdjęć warto ustawić `closed: true` dla drzwi widocznych w kadrze.
 
 Nazwy kolorów z palety aplikacji (`WALL_PALETTE`, `FRONTS` w `js/style.js`) – użyj ich, gdy pasują do opisu, inaczej dobierz hex sam.
 Lamele (`t`: `lamele_wall`, `lamele_tv`, `lamele_half`, `lamele_partition`): wykończenie w `o.finish` (`dab_czarny`, `orzech_czarny`, `dab_szary`, `czarne`, `biale`, `zielone`, `dab_bez`), rozstaw w `o.pattern` – listy w `js/catalog.js`.
 Światła (kategoria `hue` w `js/catalog.js`: paski `hue_flux`, `hue_omniglow`, `hue_strip_plus`, `hue_strip_vertical`, lampy `hue_signe_floor`, `hue_play_floor`, `hue_signe_table`, `hue_play_table`, `hue_iris`, `hue_go`, `hue_bloom`, `hue_twilight`, sufitowe/wiszące `hue_pendant`, `hue_being`, `hue_infuse`, `hue_surimu`, `hue_centris`, `hue_gu10`, girlanda `hue_festavia`; zwykła `lamp`): stan w `o` – `on` (bool), `color`, `color2` (gradient), `bright` (1–100), `dir` dla pasków (`up`/`out`/`down`); wysokość montażu `e` (cm). Podświetlenie TV: na elemencie `tv` ustaw `o.hue: true` (+ `color`, `color2`). Opis typu „wieczorem ciepłe światło 2700 K, pasek za TV na fioletowo” zamieniaj na te pola; kolory: `HUE_COLORS` w `js/lights.js`.
 Łazienka: lustra `mirror_led`, `mirror_led_round`, `mirror_arch`, `mirror_pebble`, `mirror_wave`, `mirror_cloud` (podświetlenie LED: `o.hue: true` + `color`), wieża `washer_tower`.
-Rośliny (`pl_*`, kategoria `rosliny`): kolor elementu `c` = kolor donicy, dla `pl_bukiet` = kolor kwiatów.
+Zasłony `curtain` / `sheer`: `o.fabric` (`linen`, `blackout`, `velvet`, `sheer`), `o.state` (`open`, `half`, `closed`), kolor tkaniny `c`. Kinkiety `sconce_*` jak światła. Biuro: `monitor`, `macbook_air`, `pc_tower`, `keyboard` (ekran: `o.hue: true`).
+Rośliny (`pl_*`, kategoria `rosliny`; balkonowe `pl_sakura`, `pl_klon`, `pl_bambus`): kolor elementu `c` = kolor donicy, dla `pl_bukiet` = kolor kwiatów.
 Kolor mebla: `c` w elemencie (sofa – tkanina, stół/szafki – materiał frontu/blatu, dywan – kolor dywanu). Typy elementów: `t` (klucze z `js/catalog.js`).
 
 Zapisz zmieniony JSON i zbuduj nowy link, który otworzy projekt od razu w 3D:

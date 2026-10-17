@@ -9,11 +9,11 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 import { PLAN } from './plan.js';
 import { CATALOG_BY_KEY } from './catalog.js';
-import { FLOORS, COUNTERS, FRAMES, WALL_TILES } from './style.js';
+import { FLOORS, COUNTERS, FRAMES, WALL_TILES, sideStyle } from './style.js';
 import { floorCanvas, wallTileCanvas } from './textures.js';
 import { offsetOutline } from './shapes.js';
 import { buildFurniture, elevationOf, heightOf, mat } from './furniture3d.js';
-import { doorOptions, doorGeometry, dirOf, isClosed, DOOR_FINISHES } from './doors.js';
+import { doorOptions, doorGeometry, dirOf, isClosed, DOOR_FINISHES, wallLayout } from './doors.js';
 
 const M = 0.01;
 const REVEAL = '#f1f0ec';
@@ -111,15 +111,16 @@ function collectSolids(doc, cut) {
     if (y1 - y0 > 0.1) solids.push({ rect, y0, y1, kind });
   };
   for (const r of PLAN.walls) add(r, 0, H, 'wall');
-  for (const r of PLAN.bathWalls) add(r, 0, H, 'wall');
+  const lay = wallLayout(doc);
+  for (const r of lay.bathWalls) add(r, 0, H, 'wall');
   for (const r of PLAN.context) add(r, 0, H, 'ctx');
-  for (const p of PLAN.partitions) if (!doc.demo.includes(p.id)) for (const r of p.rects) add(r, 0, H, 'wall');
+  for (const p of PLAN.partitions) for (const r of lay.partitions[p.id]) add(r, 0, H, 'wall');
   for (const w of PLAN.windows) {
     if (w.sill > 0) add(w.rect, 0, w.sill, 'wall');
     add(w.rect, w.head, H, 'wall');
   }
   const hidden = PLAN.partitions.filter((p) => p.door && doc.demo.includes(p.id)).map((p) => p.door);
-  for (const d of PLAN.doors) if (!hidden.includes(d.id)) add(d.gap, PLAN.doorHeight, H, 'wall');
+  for (const d of PLAN.doors) if (!hidden.includes(d.id)) add(lay.gaps[d.id], PLAN.doorHeight, H, 'wall');
   if (!cut) add(PLAN.soffit.rect, PLAN.soffit.height, H, 'soffit');
   return solids;
 }
@@ -207,9 +208,8 @@ const ROOM_SIDE = { n: 's', s: 'n', e: 'w', w: 'e' };
 function wallColor(style, region, side) {
   if (region === 'gap') return REVEAL;
   if (region === 'out' || region == null) return FACADE;
-  const accent = style.accent;
-  if (accent && accent.room === region && accent.side === ROOM_SIDE[side]) return accent.color;
-  return style.walls[region] || REVEAL;
+  if (!style.walls[region]) return REVEAL;
+  return sideStyle(style, region, ROOM_SIDE[side]).color;
 }
 
 function wallFaces(doc, style, cut, aniso = 8) {
@@ -222,7 +222,7 @@ function wallFaces(doc, style, cut, aniso = 8) {
     ...solids.map((o) => o.rect),
     ...PLAN.rooms.flatMap((r) => r.floor),
     ...PLAN.windows.map((w) => w.rect),
-    ...PLAN.doors.map((d) => d.gap),
+    ...Object.values(wallLayout(doc).gaps),
   ];
   for (const S of solids) {
     const [x, y, w, h] = S.rect;
@@ -265,7 +265,7 @@ function wallFaces(doc, style, cut, aniso = 8) {
         const vis = subtract([S.y0, S.y1], covers);
         const region = regionAt(sx, sy);
         const color = S.kind === 'ctx' ? '#b9b7b2' : colorFor(region, f.side);
-        const tile = S.kind !== 'ctx' && style.tiles && style.tiles[region];
+        const tile = S.kind !== 'ctx' && style.walls[region] ? sideStyle(style, region, ROOM_SIDE[f.side]).tile : null;
         const sig = color + JSON.stringify(vis) + (tile ? tile.pattern + tile.height : '');
         if (run && run.sig === sig) continue;
         flush(t0);
@@ -340,9 +340,10 @@ function surfacesOf(items) {
 // ---------------------------------------------------------------- widok
 
 export class View3D {
-  constructor(container, { onSelect, onMove, onCommit, snap }) {
+  // callbacks: onSelect(id), onSelectDoor(id), onSelectWall(room, side), onMove(it, x, y, alt), onCommit()
+  constructor(container, callbacks) {
     this.container = container;
-    this.cb = { onSelect, onMove, onCommit, snap };
+    this.cb = callbacks;
     this.opts = { cut: false, ao: true };
     this.selectedId = null;
     this.dirty = true;
@@ -419,7 +420,7 @@ export class View3D {
   setData(doc, style) {
     const sKey = JSON.stringify([doc.demo, style, doc.doors, this.opts.cut]);
     if (sKey !== this.structKey) { this.structKey = sKey; this.buildStructure(doc, style); }
-    const fKey = JSON.stringify([doc.items, style.kitchenFront, style.counter]);
+    const fKey = JSON.stringify([doc.items, style.kitchenFront, style.counter, style.counterColor]);
     if (fKey !== this.furnKey) { this.furnKey = fKey; this.buildFurniture(doc, style); }
     this.doc = doc;
     this.style = style;
@@ -439,7 +440,7 @@ export class View3D {
     const aniso = this.renderer.capabilities.getMaxAnisotropy();
     const cut = this.opts.cut ? 110 : 0;
     this.solids = collectSolids(doc, cut);
-    for (const m of wallFaces(doc, style, cut, aniso)) this.structure.add(m);
+    for (const m of wallFaces(doc, style, cut, aniso)) { m.userData.wall = true; this.structure.add(m); }
     this.shadowDirty = true;
     this.furnKey = null; // poświaty zależą od położenia ścian
 
@@ -724,7 +725,7 @@ export class View3D {
     this.clear(this.furniture);
     this.lights = [];
     this.glowMats = new Set();
-    const st = { kitchenFront: style.kitchenFront, counterHex: COUNTERS[style.counter].hex, counterWood: !!COUNTERS[style.counter].wood };
+    const st = { kitchenFront: style.kitchenFront, counterHex: style.counterColor || COUNTERS[style.counter].hex, counterWood: !style.counterColor && !!COUNTERS[style.counter].wood };
     this.nodes = new Map();
     this.surfaces = surfacesOf(doc.items);
     for (const it of doc.items) {
@@ -920,7 +921,23 @@ export class View3D {
     el.addEventListener('pointerup', (e) => {
       const click = this.downAt && Math.hypot(e.clientX - this.downAt[0], e.clientY - this.downAt[1]) < 4;
       if (drag) { this.controls.enabled = true; if (drag.moved) this.cb.onCommit(); }
-      else if (click) { if (this.pendingDoor) this.cb.onSelectDoor(this.pendingDoor); else this.cb.onSelect(this.pendingSelect); }
+      else if (click) {
+        if (this.pendingDoor) this.cb.onSelectDoor(this.pendingDoor);
+        else if (this.pendingSelect != null) this.cb.onSelect(this.pendingSelect);
+        else {
+          // klik w ścianę: pomieszczenie po stronie lica + która to ściana pomieszczenia
+          const walls = this.structure.children.filter((o) => o.userData.wall);
+          const h = this.pick(e).intersectObjects(walls, false)[0];
+          const n = h && h.face && h.face.normal;
+          if (n && Math.abs(n.y) < 0.5) {
+            const px = h.point.x / M + n.x * 1.5, py = h.point.z / M + n.z * 1.5;
+            const room = regionAt(px, py);
+            const side = Math.abs(n.x) > Math.abs(n.z) ? (n.x > 0 ? 'w' : 'e') : (n.z > 0 ? 'n' : 's');
+            if (this.cb.onSelectWall && this.doc && /^[1-5]$/.test(room || '')) this.cb.onSelectWall(room, side);
+            else this.cb.onSelect(null);
+          } else this.cb.onSelect(null);
+        }
+      }
       drag = null;
     });
   }

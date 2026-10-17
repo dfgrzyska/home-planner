@@ -67,9 +67,10 @@ export const PLAN = {
   // gap = otwór w ścianie (3D: nadproże od wysokości drzwi do sufitu)
   doors: [
     { id: 'd1', hinge: [0, 37], r: 90, open: 0, closed: 90, entry: true, gap: [-25, 37, 25, 93] },
-    { id: 'd2', hinge: [172, 190], r: 78, open: 180, closed: 270, gap: [172, 112, 12, 78] },
-    { id: 'd3', hinge: [72, 486], r: 82, open: 90, closed: 0, gap: [72, 478, 83, 8] },
-    { id: 'd4', hinge: [439, 290], r: 80, open: 270, closed: 0, gap: [439, 290, 81, 9] },
+    // host = cały odcinek ściany z otworem (przesuwanie drzwi przelicza ścianę po obu stronach otworu)
+    { id: 'd2', hinge: [172, 190], r: 78, open: 180, closed: 270, gap: [172, 112, 12, 78], host: [172, 0, 12, 304], hostOf: 'bath' },
+    { id: 'd3', hinge: [72, 486], r: 82, open: 90, closed: 0, gap: [72, 478, 83, 8], host: [0, 478, 291, 8], hostOf: 'p2h' },
+    { id: 'd4', hinge: [439, 290], r: 80, open: 270, closed: 0, gap: [439, 290, 81, 9], host: [378, 290, 393, 9], hostOf: 'p3' },
   ],
   doorHeight: 205,
 
